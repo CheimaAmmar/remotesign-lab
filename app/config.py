@@ -10,6 +10,8 @@ class Settings(BaseSettings):
 
     database_url: str
 
+    admin_api_key: SecretStr
+
     softhsm_module: str
     softhsm_token_label: str = "STAGE-HSM"
     softhsm_key_label: str = "REMOTE-SIGNING-KEY"

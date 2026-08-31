@@ -35,9 +35,12 @@ from app.security.device_auth import (
     verify_device_hmac,
 )
 
+from app.security.admin_auth import (
+    require_admin,
+)
+
 from app.security.nonce_store import (
-    is_nonce_used,
-    store_nonce,
+    consume_nonce,
 )
 
 router = APIRouter(
@@ -50,6 +53,7 @@ router = APIRouter(
     "",
     response_model=DeviceRead,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_admin)],
 )
 def create_device(
     payload: DeviceCreate,
@@ -112,6 +116,7 @@ def create_device(
 @router.get(
     "",
     response_model=list[DeviceRead],
+    dependencies=[Depends(require_admin)],
 )
 def list_devices(
     limit: int = Query(default=50, ge=1, le=100),
@@ -131,6 +136,7 @@ def list_devices(
 @router.post(
     "/{device_id}/enroll",
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_admin)],
 )
 def enroll_device(
     device_id: uuid.UUID,
@@ -210,20 +216,6 @@ def authenticated_device_test(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Device has no authentication secret",
         )
-
-    # --------------------------------------------------
-    # Anti-replay : nonce déjà utilisé ?
-    # --------------------------------------------------
-
-    if is_nonce_used(
-        device.device_uid,
-        x_nonce,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Nonce already used",
-        )
-
     # --------------------------------------------------
     # Vérification HMAC
     # --------------------------------------------------
@@ -247,10 +239,17 @@ def authenticated_device_test(
     # HMAC valide → nonce consommé
     # --------------------------------------------------
 
-    store_nonce(
-        device.device_uid,
-        x_nonce,
+    nonce_accepted = consume_nonce(
+        database=database,
+        device_id=device.id,
+        nonce=x_nonce,
     )
+
+    if not nonce_accepted:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Nonce already used",
+        )
 
     # --------------------------------------------------
     # Mise à jour dernière connexion
@@ -269,6 +268,7 @@ def authenticated_device_test(
 @router.get(
     "/{device_id}",
     response_model=DeviceRead,
+    dependencies=[Depends(require_admin)],
 )
 def get_device(
     device_id: uuid.UUID,
@@ -339,15 +339,6 @@ def local_auth(
             detail="Missing device secret",
         )
 
-    if is_nonce_used(
-        device.device_uid,
-        x_nonce,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Nonce already used",
-        )
-
     extra_data = (
         normalized_rfid_uid
         + "\n"
@@ -370,10 +361,17 @@ def local_auth(
             detail="Invalid device authentication",
         )
 
-    store_nonce(
-        device.device_uid,
-        x_nonce,
+    nonce_accepted = consume_nonce(
+        database=database,
+        device_id=device.id,
+        nonce=x_nonce,
     )
+
+    if not nonce_accepted:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Nonce already used",
+        )
 
     device.last_seen = datetime.now(timezone.utc)
 

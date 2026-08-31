@@ -1,0 +1,918 @@
+import hashlib
+import uuid
+
+from datetime import (
+    datetime,
+    timedelta,
+    timezone,
+)
+
+from pathlib import Path
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    Header,
+    HTTPException,
+    Request,
+    status,
+)
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+
+from app.models import (
+    AuthenticationSession,
+    Device,
+    DeviceStatus,
+    Document,
+    DocumentSignature,
+)
+
+from app.security.device_auth import (
+    verify_device_hmac,
+)
+
+from app.security.nonce_store import (
+    consume_nonce,
+)
+
+from app.services.hsm_service import (
+    HSMService,
+    HSMServiceError,
+)
+
+from app.services.audit_service import (
+    add_audit_event,
+    record_audit_event,
+)
+
+from app.security.rate_limit import (
+    is_rate_limited,
+)
+
+
+router = APIRouter(
+    prefix="/api/v1/sign",
+    tags=["Signing"],
+)
+
+
+SIGNING_AUTHORIZATION_TTL_SECONDS = 60
+
+
+PROJECT_ROOT = (
+    Path(__file__)
+    .resolve()
+    .parents[2]
+)
+
+DOCUMENT_STORAGE = (
+    PROJECT_ROOT
+    / "storage"
+    / "documents"
+)
+
+
+# ======================================================
+# REJET CENTRALISE DE /sign
+# ======================================================
+
+def reject_sign(
+    database: Session,
+    *,
+    status_code: int,
+    response_detail: str,
+    audit_detail: str,
+    source_ip: str | None,
+    user_id=None,
+    device_id=None,
+    session_id=None,
+    document_id=None,
+) -> None:
+
+    # Libère la transaction courante et notamment
+    # un éventuel verrou SELECT ... FOR UPDATE.
+    database.rollback()
+
+    record_audit_event(
+        database,
+        event_type="DOCUMENT_SIGN_REJECTED",
+        outcome="FAILED",
+        user_id=user_id,
+        device_id=device_id,
+        session_id=session_id,
+        document_id=document_id,
+        source_ip=source_ip,
+        detail=audit_detail,
+    )
+
+    raise HTTPException(
+        status_code=status_code,
+        detail=response_detail,
+    )
+
+
+# ======================================================
+# SIGN
+# ======================================================
+
+@router.post(
+    "",
+    status_code=status.HTTP_200_OK,
+)
+def sign_document(
+    request: Request,
+
+    x_device_uid: str = Header(...),
+    x_timestamp: str = Header(...),
+    x_nonce: str = Header(...),
+
+    x_session_id: str = Header(...),
+
+    x_document_id: str = Header(...),
+    x_document_hash: str = Header(...),
+    x_decision: str = Header(...),
+
+    x_signature: str = Header(...),
+
+    database: Session = Depends(get_db),
+) -> dict:
+
+    # ==================================================
+    # IP SOURCE
+    # ==================================================
+
+    source_ip = (
+        request.client.host
+        if request.client
+        else None
+    )
+
+    # ==================================================
+    # NORMALISATION
+    # ==================================================
+
+    device_uid = (
+        x_device_uid
+        .strip()
+        .upper()
+    )
+
+    document_hash = (
+        x_document_hash
+        .strip()
+        .lower()
+    )
+
+    decision = (
+        x_decision
+        .strip()
+        .upper()
+    )
+
+    # ==================================================
+    # DEVICE
+    #
+    # IMPORTANT :
+    # device doit être chargé AVANT tout usage device.id
+    # ==================================================
+
+    device = database.scalar(
+        select(
+            Device
+        ).where(
+            Device.device_uid
+            == device_uid
+        )
+    )
+
+    if device is None:
+        reject_sign(
+            database,
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            response_detail="Unknown device",
+            audit_detail="Unknown device",
+            source_ip=source_ip,
+        )
+
+    # ==================================================
+    # RATE LIMIT
+    # ==================================================
+
+    if is_rate_limited(
+        database,
+        source_ip=source_ip,
+        device_id=device.id,
+    ):
+
+        record_audit_event(
+            database,
+            event_type="RATE_LIMIT_BLOCKED",
+            outcome="FAILED",
+            device_id=device.id,
+            source_ip=source_ip,
+            detail="Too many failed signing attempts",
+        )
+
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed attempts",
+        )
+
+    # ==================================================
+    # DEVICE STATUS
+    # ==================================================
+
+    if device.status != DeviceStatus.ACTIVE:
+        reject_sign(
+            database,
+            status_code=status.HTTP_403_FORBIDDEN,
+            response_detail="Device is not active",
+            audit_detail="Device is not active",
+            source_ip=source_ip,
+            device_id=device.id,
+        )
+
+    if device.device_secret is None:
+        reject_sign(
+            database,
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            response_detail="Missing device secret",
+            audit_detail="Missing device authentication secret",
+            source_ip=source_ip,
+            device_id=device.id,
+        )
+
+    # ==================================================
+    # SESSION ID
+    # ==================================================
+
+    try:
+        session_id = uuid.UUID(
+            x_session_id.strip()
+        )
+
+    except (
+        ValueError,
+        TypeError,
+    ):
+        reject_sign(
+            database,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            response_detail="Invalid authentication session ID",
+            audit_detail="Invalid authentication session ID",
+            source_ip=source_ip,
+            device_id=device.id,
+        )
+
+    session_id_string = str(
+        session_id
+    )
+
+    # ==================================================
+    # DOCUMENT ID
+    # ==================================================
+
+    try:
+        document_id = uuid.UUID(
+            x_document_id.strip()
+        )
+
+    except (
+        ValueError,
+        TypeError,
+    ):
+        reject_sign(
+            database,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            response_detail="Invalid document ID",
+            audit_detail="Invalid document ID",
+            source_ip=source_ip,
+            device_id=device.id,
+        )
+
+    document_id_string = str(
+        document_id
+    )
+
+    # ==================================================
+    # DOCUMENT HASH
+    # ==================================================
+
+    if len(document_hash) != 64:
+        reject_sign(
+            database,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            response_detail="Invalid document SHA-256",
+            audit_detail="Invalid document SHA-256",
+            source_ip=source_ip,
+            device_id=device.id,
+        )
+
+    try:
+        supplied_digest = bytes.fromhex(
+            document_hash
+        )
+
+    except ValueError:
+        reject_sign(
+            database,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            response_detail="Invalid document SHA-256",
+            audit_detail="Invalid document SHA-256",
+            source_ip=source_ip,
+            device_id=device.id,
+        )
+
+    if len(supplied_digest) != 32:
+        reject_sign(
+            database,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            response_detail="Invalid document SHA-256",
+            audit_detail="Invalid document SHA-256",
+            source_ip=source_ip,
+            device_id=device.id,
+        )
+
+    # ==================================================
+    # DECISION
+    # ==================================================
+
+    if decision != "APPROVE":
+        reject_sign(
+            database,
+            status_code=status.HTTP_403_FORBIDDEN,
+            response_detail="Signing not approved",
+            audit_detail="Signing not approved",
+            source_ip=source_ip,
+            device_id=device.id,
+        )
+
+    # ==================================================
+    # HMAC
+    #
+    # POST
+    # /api/v1/sign
+    # timestamp
+    # nonce
+    # session_id
+    # document_id
+    # document_hash
+    # APPROVE
+    # ==================================================
+
+    extra_data = "\n".join(
+        [
+            session_id_string,
+            document_id_string,
+            document_hash,
+            decision,
+        ]
+    )
+
+    valid = verify_device_hmac(
+        device_secret=device.device_secret,
+        method=request.method,
+        path=request.url.path,
+        timestamp=x_timestamp,
+        nonce=x_nonce,
+        received_signature=x_signature,
+        extra_data=extra_data,
+    )
+
+    if not valid:
+        reject_sign(
+            database,
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            response_detail="Invalid device authentication",
+            audit_detail="Invalid signing request HMAC",
+            source_ip=source_ip,
+            device_id=device.id,
+        )
+
+    # ==================================================
+    # SESSION + VERROU POSTGRESQL
+    # ==================================================
+
+    auth_session = database.scalar(
+        select(
+            AuthenticationSession
+        )
+        .where(
+            AuthenticationSession.id
+            == session_id
+        )
+        .with_for_update()
+    )
+
+    if auth_session is None:
+        reject_sign(
+            database,
+            status_code=status.HTTP_404_NOT_FOUND,
+            response_detail="Authentication session not found",
+            audit_detail="Authentication session not found",
+            source_ip=source_ip,
+            device_id=device.id,
+        )
+
+    # ==================================================
+    # DEVICE / SESSION
+    # ==================================================
+
+    if auth_session.device_id != device.id:
+        reject_sign(
+            database,
+            status_code=status.HTTP_403_FORBIDDEN,
+            response_detail="Authentication session/device mismatch",
+            audit_detail="Signing session/device mismatch",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=auth_session.document_id,
+        )
+
+    # ==================================================
+    # SESSION VERIFIEE
+    # ==================================================
+
+    if auth_session.verified_at is None:
+        reject_sign(
+            database,
+            status_code=status.HTTP_403_FORBIDDEN,
+            response_detail="Authentication session not verified",
+            audit_detail=(
+                "Signing attempted without completed strong authentication"
+            ),
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=auth_session.document_id,
+        )
+
+    # ==================================================
+    # SESSION DEJA UTILISEE
+    # ==================================================
+
+    if auth_session.used_at is not None:
+        reject_sign(
+            database,
+            status_code=status.HTTP_409_CONFLICT,
+            response_detail="Authentication session already used",
+            audit_detail="Signing session already consumed",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=auth_session.document_id,
+        )
+
+    # ==================================================
+    # DOUBLE PROTECTION : SIGNATURE DEJA EXISTANTE ?
+    # ==================================================
+
+    existing_signature = database.scalar(
+        select(
+            DocumentSignature
+        ).where(
+            DocumentSignature.session_id
+            == auth_session.id
+        )
+    )
+
+    if existing_signature is not None:
+        reject_sign(
+            database,
+            status_code=status.HTTP_409_CONFLICT,
+            response_detail=(
+                "Authentication session already has a signature"
+            ),
+            audit_detail=(
+                "Authentication session already has a signature"
+            ),
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=auth_session.document_id,
+        )
+
+    # ==================================================
+    # DOCUMENT ID DE LA SESSION
+    # ==================================================
+
+    if auth_session.document_id != document_id:
+        reject_sign(
+            database,
+            status_code=status.HTTP_403_FORBIDDEN,
+            response_detail="Document ID mismatch",
+            audit_detail="Signing document ID mismatch",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=auth_session.document_id,
+        )
+
+    # ==================================================
+    # DOCUMENT HASH DE LA SESSION
+    # ==================================================
+
+    if auth_session.document_hash != document_hash:
+        reject_sign(
+            database,
+            status_code=status.HTTP_403_FORBIDDEN,
+            response_detail="Document hash mismatch",
+            audit_detail="Signing document hash mismatch",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=auth_session.document_id,
+        )
+
+    # ==================================================
+    # DECISION DE LA SESSION
+    # ==================================================
+
+    if auth_session.decision != decision:
+        reject_sign(
+            database,
+            status_code=status.HTTP_403_FORBIDDEN,
+            response_detail="Signing decision mismatch",
+            audit_detail="Signing decision mismatch",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=auth_session.document_id,
+        )
+
+    # ==================================================
+    # AUTORISATION DE SIGNATURE RECENTE
+    # ==================================================
+
+    now = datetime.now(
+        timezone.utc
+    )
+
+    signing_deadline = (
+        auth_session.verified_at
+        + timedelta(
+            seconds=SIGNING_AUTHORIZATION_TTL_SECONDS
+        )
+    )
+
+    if now > signing_deadline:
+        reject_sign(
+            database,
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            response_detail="Signing authorization expired",
+            audit_detail="Signing authorization expired",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=auth_session.document_id,
+        )
+
+    # ==================================================
+    # DOCUMENT POSTGRESQL
+    # ==================================================
+
+    document = database.get(
+        Document,
+        document_id,
+    )
+
+    if document is None:
+        reject_sign(
+            database,
+            status_code=status.HTTP_404_NOT_FOUND,
+            response_detail="Document not found",
+            audit_detail="Signing document not found",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+        )
+
+    # ==================================================
+    # HASH POSTGRESQL
+    # ==================================================
+
+    if document.document_hash != document_hash:
+        reject_sign(
+            database,
+            status_code=status.HTTP_409_CONFLICT,
+            response_detail="Stored document hash mismatch",
+            audit_detail="Stored document hash mismatch",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+        )
+
+    # ==================================================
+    # FICHIER REEL
+    # ==================================================
+
+    storage_root = (
+        DOCUMENT_STORAGE
+        .resolve()
+    )
+
+    document_path = (
+        DOCUMENT_STORAGE
+        / document.stored_filename
+    ).resolve()
+
+    if not document_path.is_relative_to(
+        storage_root
+    ):
+        reject_sign(
+            database,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            response_detail="Invalid stored document path",
+            audit_detail="Invalid stored document path",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+        )
+
+    if not document_path.is_file():
+        reject_sign(
+            database,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            response_detail="Stored document file not found",
+            audit_detail="Stored document file missing",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+        )
+
+    # ==================================================
+    # RECALCUL SHA-256 DU VRAI PDF
+    # ==================================================
+
+    sha256 = hashlib.sha256()
+
+    try:
+        with document_path.open(
+            "rb"
+        ) as input_file:
+
+            while True:
+                chunk = input_file.read(
+                    64 * 1024
+                )
+
+                if not chunk:
+                    break
+
+                sha256.update(
+                    chunk
+                )
+
+    except OSError:
+        reject_sign(
+            database,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            response_detail="Unable to read stored document",
+            audit_detail="Unable to read stored document",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+        )
+
+    actual_document_hash = (
+        sha256.hexdigest()
+    )
+
+    # ==================================================
+    # INTEGRITE PDF / DB
+    # ==================================================
+
+    if actual_document_hash != document.document_hash:
+        reject_sign(
+            database,
+            status_code=status.HTTP_409_CONFLICT,
+            response_detail="Document integrity verification failed",
+            audit_detail=(
+                "Stored document integrity verification failed"
+            ),
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+        )
+
+    # ==================================================
+    # INTEGRITE PDF / SESSION
+    # ==================================================
+
+    if actual_document_hash != auth_session.document_hash:
+        reject_sign(
+            database,
+            status_code=status.HTTP_409_CONFLICT,
+            response_detail="Authentication document mismatch",
+            audit_detail=(
+                "Stored file does not match authenticated document"
+            ),
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+        )
+
+    # ==================================================
+    # INTEGRITE PDF / REQUETE
+    # ==================================================
+
+    if actual_document_hash != document_hash:
+        reject_sign(
+            database,
+            status_code=status.HTTP_409_CONFLICT,
+            response_detail="Requested document hash mismatch",
+            audit_detail=(
+                "Stored file does not match requested document hash"
+            ),
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+        )
+
+    # ==================================================
+    # NONCE POSTGRESQL
+    # ==================================================
+
+    nonce_accepted = consume_nonce(
+        database=database,
+        device_id=device.id,
+        nonce=x_nonce,
+    )
+
+    if not nonce_accepted:
+        reject_sign(
+            database,
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            response_detail="Nonce already used",
+            audit_detail="Signing nonce replay detected",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+        )
+
+    # ==================================================
+    # DIGEST FIABLE
+    # ==================================================
+
+    document_digest = bytes.fromhex(
+        actual_document_hash
+    )
+
+    # ==================================================
+    # SOFTHSM
+    # ==================================================
+
+    try:
+        hsm = HSMService()
+
+        signature_result = (
+            hsm.sign_sha256_digest_rsa_pkcs1(
+                document_digest
+            )
+        )
+
+    except HSMServiceError:
+        reject_sign(
+            database,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            response_detail="HSM signing failed",
+            audit_detail="SoftHSM signing operation failed",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+        )
+
+    # ==================================================
+    # ENREGISTREMENT SIGNATURE
+    # ==================================================
+
+    signature_record = DocumentSignature(
+        session_id=auth_session.id,
+        document_id=document.id,
+        user_id=auth_session.user_id,
+        device_id=device.id,
+        document_hash=actual_document_hash,
+        algorithm=signature_result.algorithm,
+        key_label=signature_result.key_label,
+        signature_base64=signature_result.signature_base64,
+    )
+
+    database.add(
+        signature_record
+    )
+
+    database.flush()
+
+    # ==================================================
+    # CONSOMMATION SESSION
+    # ==================================================
+
+    signed_at = datetime.now(
+        timezone.utc
+    )
+
+    auth_session.used_at = (
+        signed_at
+    )
+
+    device.last_seen = (
+        signed_at
+    )
+
+    # ==================================================
+    # AUDIT SUCCESS
+    # ==================================================
+
+    add_audit_event(
+        database,
+        event_type="DOCUMENT_SIGNED",
+        outcome="SUCCESS",
+        user_id=auth_session.user_id,
+        device_id=device.id,
+        session_id=auth_session.id,
+        document_id=document.id,
+        signature_id=signature_record.id,
+        source_ip=source_ip,
+        detail="Document signed using SoftHSM",
+    )
+
+    # ==================================================
+    # COMMIT ATOMIQUE
+    # ==================================================
+
+    database.commit()
+
+    database.refresh(
+        signature_record
+    )
+
+    # ==================================================
+    # REPONSE
+    # ==================================================
+
+    return {
+        "signed":
+            True,
+
+        "signature_id":
+            str(
+                signature_record.id
+            ),
+
+        "session_id":
+            str(
+                auth_session.id
+            ),
+
+        "document_id":
+            str(
+                document.id
+            ),
+
+        "document_hash":
+            actual_document_hash,
+
+        "algorithm":
+            signature_result.algorithm,
+
+        "key_label":
+            signature_result.key_label,
+
+        "signature_base64":
+            signature_result.signature_base64,
+
+        "message":
+            "Stored document signed successfully",
+    }

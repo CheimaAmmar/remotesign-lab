@@ -1,0 +1,220 @@
+import hashlib
+import uuid
+
+from pathlib import Path
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    UploadFile,
+    status,
+)
+
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models import Document
+from app.security.admin_auth import require_admin
+
+
+router = APIRouter(
+    prefix="/api/v1/documents",
+    tags=["Documents"],
+    dependencies=[Depends(require_admin)],
+)
+
+
+DOCUMENT_STORAGE = Path(
+    "storage/documents"
+)
+
+MAX_DOCUMENT_SIZE = (
+    20 * 1024 * 1024
+)
+
+
+@router.post(
+    "/upload",
+    status_code=status.HTTP_201_CREATED,
+)
+def upload_document(
+    file: UploadFile = File(...),
+    database: Session = Depends(get_db),
+) -> dict:
+
+    # ==============================================
+    # NOM ORIGINAL
+    # ==============================================
+
+    original_filename = (
+        file.filename
+        or "document.pdf"
+    )
+
+    # ==============================================
+    # PDF UNIQUEMENT POUR LE PROTOTYPE
+    # ==============================================
+
+    if not original_filename.lower().endswith(
+        ".pdf"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PDF documents are accepted",
+        )
+
+    # ==============================================
+    # NOM DE STOCKAGE ALEATOIRE
+    # ==============================================
+
+    document_id = uuid.uuid4()
+
+    stored_filename = (
+        f"{document_id}.pdf"
+    )
+
+    DOCUMENT_STORAGE.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    destination = (
+        DOCUMENT_STORAGE
+        / stored_filename
+    )
+
+    # ==============================================
+    # SHA-256 EN STREAMING
+    # ==============================================
+
+    sha256 = hashlib.sha256()
+
+    total_size = 0
+
+    try:
+
+        with destination.open(
+            "wb"
+        ) as output_file:
+
+            while True:
+
+                chunk = file.file.read(
+                    64 * 1024
+                )
+
+                if not chunk:
+                    break
+
+                total_size += len(
+                    chunk
+                )
+
+                if (
+                    total_size
+                    > MAX_DOCUMENT_SIZE
+                ):
+
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail="Document too large",
+                    )
+
+                sha256.update(
+                    chunk
+                )
+
+                output_file.write(
+                    chunk
+                )
+
+    except HTTPException:
+
+        destination.unlink(
+            missing_ok=True
+        )
+
+        raise
+
+    except OSError as error:
+
+        destination.unlink(
+            missing_ok=True
+        )
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to store document",
+        ) from error
+
+    finally:
+
+        file.file.close()
+
+    # ==============================================
+    # FICHIER VIDE ?
+    # ==============================================
+
+    if total_size == 0:
+
+        destination.unlink(
+            missing_ok=True
+        )
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty document",
+        )
+
+    # ==============================================
+    # HASH SERVEUR
+    # ==============================================
+
+    document_hash = (
+        sha256.hexdigest()
+    )
+
+    # ==============================================
+    # POSTGRESQL
+    # ==============================================
+
+    document = Document(
+        id=document_id,
+        original_filename=original_filename,
+        stored_filename=stored_filename,
+        content_type=file.content_type,
+        size_bytes=total_size,
+        document_hash=document_hash,
+    )
+
+    database.add(
+        document
+    )
+
+    database.commit()
+
+    database.refresh(
+        document
+    )
+
+    # ==============================================
+    # REPONSE
+    # ==============================================
+
+    return {
+        "document_id": str(
+            document.id
+        ),
+        "filename":
+            document.original_filename,
+        "size_bytes":
+            document.size_bytes,
+        "document_hash":
+            document.document_hash,
+        "algorithm":
+            "SHA-256",
+        "message":
+            "Document uploaded and hashed successfully",
+    }

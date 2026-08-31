@@ -19,3 +19,15 @@ __pycache__/
 
 softhsm_tokens/
 tokens/
+
+# Local environment / secrets
+.venv/
+.env
+__pycache__/
+*.pyc
+
+# TLS private certificates
+certs/
+
+# Uploaded/runtime documents
+storage/

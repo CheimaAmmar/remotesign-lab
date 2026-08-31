@@ -6,9 +6,21 @@ from sqlalchemy.orm import Session
 from app.api.auth import router as auth_router
 from app.api.devices import router as devices_router
 from app.api.users import router as users_router
+from app.api.signing import router as signing_router
 
 from app.config import get_settings
 from app.database import get_db
+
+from app.api.signatures import (
+    router as signatures_router,
+)
+
+from app.api.documents import (
+    router as documents_router,
+)
+from app.api.audit import (
+    router as audit_router,
+)
 
 settings = get_settings()
 
@@ -25,6 +37,11 @@ app = FastAPI(
 app.include_router(users_router)
 app.include_router(devices_router)
 app.include_router(auth_router)
+app.include_router(signing_router)
+app.include_router(documents_router)
+app.include_router(signatures_router)
+app.include_router(audit_router)
+
 
 @app.get("/", tags=["General"])
 def root() -> dict[str, str]:

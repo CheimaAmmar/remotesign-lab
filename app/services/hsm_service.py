@@ -72,7 +72,74 @@ class HSMService:
             algorithm="SHA256-RSA-PKCS1-v1_5",
             key_label=self.settings.softhsm_key_label,
         )
+    def sign_sha256_digest_rsa_pkcs1(
+        self,
+        digest: bytes,
+    ) -> SignatureResult:
 
+        if len(digest) != 32:
+            raise HSMServiceError(
+                "Le digest SHA-256 doit faire exactement 32 octets"
+            )
+
+        sha256_digest_info_prefix = bytes.fromhex(
+            "3031300d060960864801650304020105000420"
+        )
+
+        digest_info = (
+            sha256_digest_info_prefix
+            + digest
+        )
+
+        try:
+
+            with self.token.open(
+                user_pin=
+                    self.settings
+                    .softhsm_user_pin
+                    .get_secret_value()
+            ) as session:
+
+                private_key = session.get_key(
+                    object_class=
+                        ObjectClass.PRIVATE_KEY,
+                    key_type=
+                        KeyType.RSA,
+                    label=
+                        self.settings
+                        .softhsm_key_label,
+                )
+
+                signature = bytes(
+                    private_key.sign(
+                        digest_info,
+                        mechanism=
+                            Mechanism.RSA_PKCS,
+                    )
+                )
+
+        except PKCS11Error as error:
+
+            raise HSMServiceError(
+                "La signature du digest SHA-256 a échoué"
+            ) from error
+
+        return SignatureResult(
+            signature=signature,
+
+            signature_base64=
+                base64.b64encode(
+                    signature
+                ).decode(
+                    "ascii"
+                ),
+
+            algorithm=
+                "RSASSA-PKCS1-v1_5-SHA256",
+
+            key_label=
+                self.settings.softhsm_key_label,
+        )
     def get_public_key_der(self) -> bytes:
         try:
             with self.token.open() as session:

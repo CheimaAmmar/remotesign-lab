@@ -1,43 +1,153 @@
-import time
+import re
+
+from datetime import (
+    datetime,
+    timedelta,
+    timezone,
+)
+
+from sqlalchemy import delete
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.models import UsedNonce
 
 
+# Durée pendant laquelle le timestamp/HMAC
+# considère normalement la requête comme récente.
 NONCE_TTL_SECONDS = 120
 
-_used_nonces: dict[str, float] = {}
+# Conservation supplémentaire en base avant nettoyage.
+NONCE_RETENTION_SECONDS = 600
 
 
-def cleanup_expired_nonces() -> None:
-    now = time.time()
+# ======================================================
+# NETTOYAGE DES ANCIENS NONCES
+# ======================================================
 
-    expired_keys = [
-        key
-        for key, expiration in _used_nonces.items()
-        if expiration <= now
-    ]
+def cleanup_old_nonces(
+    database: Session,
+) -> None:
 
-    for key in expired_keys:
-        _used_nonces.pop(key, None)
+    now = datetime.now(
+        timezone.utc
+    )
+
+    threshold = (
+        now
+        - timedelta(
+            seconds=NONCE_RETENTION_SECONDS
+        )
+    )
+
+    database.execute(
+        delete(
+            UsedNonce
+        ).where(
+            UsedNonce.expires_at
+            < threshold
+        )
+    )
 
 
-def is_nonce_used(
-    device_uid: str,
+# ======================================================
+# CONSOMMATION ATOMIQUE DU NONCE
+# ======================================================
+
+def consume_nonce(
+    database: Session,
+    device_id,
     nonce: str,
 ) -> bool:
-    cleanup_expired_nonces()
+    """
+    Consomme un nonce de manière atomique.
 
-    key = f"{device_uid}:{nonce}"
+    Retour :
+        True  -> nonce accepté
+        False -> nonce invalide ou déjà utilisé
 
-    return key in _used_nonces
+    La contrainte PostgreSQL :
 
+        UNIQUE(device_id, nonce)
 
-def store_nonce(
-    device_uid: str,
-    nonce: str,
-) -> None:
-    cleanup_expired_nonces()
+    protège contre deux utilisations concurrentes
+    du même nonce.
+    """
 
-    key = f"{device_uid}:{nonce}"
+    # ==================================================
+    # NORMALISATION
+    # ==================================================
 
-    _used_nonces[key] = (
-        time.time() + NONCE_TTL_SECONDS
+    normalized_nonce = (
+        nonce
+        .strip()
+        .lower()
     )
+
+    # ==================================================
+    # FORMAT
+    #
+    # Firmware :
+    # 16 octets aléatoires
+    # = 32 caractères hexadécimaux
+    # ==================================================
+
+    if not re.fullmatch(
+        r"[0-9a-f]{32}",
+        normalized_nonce,
+    ):
+        return False
+
+    # ==================================================
+    # NETTOYAGE
+    # ==================================================
+
+    cleanup_old_nonces(
+        database
+    )
+
+    # ==================================================
+    # EXPIRATION
+    # ==================================================
+
+    now = datetime.now(
+        timezone.utc
+    )
+
+    expires_at = (
+        now
+        + timedelta(
+            seconds=NONCE_TTL_SECONDS
+        )
+    )
+
+    used_nonce = UsedNonce(
+        device_id=device_id,
+        nonce=normalized_nonce,
+        expires_at=expires_at,
+    )
+
+    # ==================================================
+    # INSERTION ATOMIQUE
+    # ==================================================
+
+    try:
+
+        # SAVEPOINT SQLAlchemy/PostgreSQL.
+        #
+        # Si UNIQUE(device_id, nonce) échoue,
+        # seule cette sous-transaction est annulée.
+
+        with database.begin_nested():
+
+            database.add(
+                used_nonce
+            )
+
+            database.flush()
+
+    except IntegrityError:
+
+        return False
+
+    return True
