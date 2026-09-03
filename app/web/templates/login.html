@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Connexion | Stage-HSM</title>
+  <link rel="stylesheet" href="/ui/static/styles.css">
+  <script src="/ui/static/login.js" defer></script>
+</head>
+<body class="login-page">
+  <main class="login-layout">
+    <section class="login-card" aria-labelledby="login-title">
+      <div class="brand" aria-label="Stage-HSM">
+        <span class="brand-mark" aria-hidden="true">SH</span>
+        <span>
+          <strong>Stage-HSM</strong>
+          <small>Prototype local</small>
+        </span>
+      </div>
+
+      <div class="login-heading">
+        <p class="eyebrow">Accès protégé</p>
+        <h1 id="login-title">Ouvrir l’interface</h1>
+        <p>Authentifiez cette session avant de déposer un document.</p>
+      </div>
+
+      <div id="login-feedback" class="alert alert-error" role="alert" aria-live="assertive" hidden></div>
+
+      <form class="login-form" action="/ui/login" method="post">
+        <div class="field">
+          <label for="admin-key">Clé d’accès administrateur</label>
+          <input
+            id="admin-key"
+            name="admin_key"
+            type="password"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+            required
+            autofocus
+          >
+          <p class="field-hint">La clé est envoyée au serveur par la connexion HTTPS et n’est pas enregistrée par cette page.</p>
+        </div>
+
+        <button class="button button-primary button-wide" type="submit">Ouvrir une session</button>
+      </form>
+
+      <p class="login-footnote">L’interface utilise une session locale limitée dans le temps.</p>
+    </section>
+  </main>
+</body>
+</html>

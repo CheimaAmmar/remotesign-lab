@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "Stage HSM Server"
     app_version: str = "0.1.0"
+    signature_device_uid: str = "ESP32-001"
 
     database_url: str
 

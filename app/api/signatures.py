@@ -35,6 +35,8 @@ from app.models import (
     DocumentSignature,
 )
 
+from app.security.admin_auth import require_admin
+
 from app.services.hsm_service import (
     HSMService,
     HSMServiceError,
@@ -44,6 +46,7 @@ from app.services.hsm_service import (
 router = APIRouter(
     prefix="/api/v1/signatures",
     tags=["Signatures"],
+    dependencies=[Depends(require_admin)],
 )
 
 

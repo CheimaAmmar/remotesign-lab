@@ -4,9 +4,11 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Text,
     Integer,
     String,
@@ -28,6 +30,16 @@ class DeviceStatus(str, enum.Enum):
     PENDING = "PENDING"
     ACTIVE = "ACTIVE"
     REVOKED = "REVOKED"
+
+
+class SignatureRequestStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    CLAIMED = "CLAIMED"
+    AUTHENTICATING = "AUTHENTICATING"
+    AUTHENTICATED = "AUTHENTICATED"
+    SIGNED = "SIGNED"
+    FAILED = "FAILED"
+    EXPIRED = "EXPIRED"
 
 
 class User(Base):
@@ -532,6 +544,157 @@ class DocumentSignature(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class SignatureRequest(Base):
+    __tablename__ = "signature_requests"
+
+    __table_args__ = (
+        CheckConstraint(
+            "char_length(document_hash) = 64",
+            name="ck_signature_request_document_hash_length",
+        ),
+        CheckConstraint(
+            "decision = 'APPROVE'",
+            name="ck_signature_request_decision",
+        ),
+        UniqueConstraint(
+            "authentication_session_id",
+            name="uq_signature_request_authentication_session",
+        ),
+        UniqueConstraint(
+            "signature_id",
+            name="uq_signature_request_signature",
+        ),
+        Index(
+            "ix_signature_requests_device_status_created_at",
+            "device_id",
+            "status",
+            "created_at",
+        ),
+        Index(
+            "ix_signature_requests_status_expires_at",
+            "status",
+            "expires_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    owner_session_id: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    device_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "devices.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "documents.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    document_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    decision: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="APPROVE",
+        server_default="APPROVE",
+    )
+
+    status: Mapped[SignatureRequestStatus] = mapped_column(
+        Enum(
+            SignatureRequestStatus,
+            name="signature_request_status",
+            native_enum=True,
+        ),
+        nullable=False,
+        default=SignatureRequestStatus.PENDING,
+        server_default=SignatureRequestStatus.PENDING.value,
+    )
+
+    authentication_session_id: Mapped[
+        uuid.UUID | None
+    ] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "authentication_sessions.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+    )
+
+    signature_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "document_signatures.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+    )
+
+    failure_detail: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    claimed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    authentication_started_at: Mapped[
+        datetime | None
+    ] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    authenticated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),

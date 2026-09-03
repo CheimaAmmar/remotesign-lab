@@ -6,10 +6,8 @@ from datetime import datetime, timezone
 from fastapi import (
     APIRouter,
     Depends,
-    Header,
     HTTPException,
     Query,
-    Request,
     status,
 )
 
@@ -31,16 +29,8 @@ from app.schemas import (
     DeviceRead,
 )
 
-from app.security.device_auth import (
-    verify_device_hmac,
-)
-
 from app.security.admin_auth import (
     require_admin,
-)
-
-from app.security.nonce_store import (
-    consume_nonce,
 )
 
 router = APIRouter(
@@ -178,92 +168,6 @@ def enroll_device(
         "last_seen": device.last_seen,
     }
 
-@router.post(
-    "/auth-test",
-    status_code=status.HTTP_200_OK,
-)
-def authenticated_device_test(
-    request: Request,
-    x_device_uid: str = Header(...),
-    x_timestamp: str = Header(...),
-    x_nonce: str = Header(...),
-    x_signature: str = Header(...),
-    database: Session = Depends(get_db),
-) -> dict:
-
-    normalized_uid = x_device_uid.strip().upper()
-
-    device = database.scalar(
-        select(Device).where(
-            Device.device_uid == normalized_uid
-        )
-    )
-
-    if device is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unknown device",
-        )
-
-    if device.status != DeviceStatus.ACTIVE:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Device is not active",
-        )
-
-    if device.device_secret is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Device has no authentication secret",
-        )
-    # --------------------------------------------------
-    # Vérification HMAC
-    # --------------------------------------------------
-
-    valid = verify_device_hmac(
-        device_secret=device.device_secret,
-        method=request.method,
-        path=request.url.path,
-        timestamp=x_timestamp,
-        nonce=x_nonce,
-        received_signature=x_signature,
-    )
-
-    if not valid:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid device authentication",
-        )
-
-    # --------------------------------------------------
-    # HMAC valide → nonce consommé
-    # --------------------------------------------------
-
-    nonce_accepted = consume_nonce(
-        database=database,
-        device_id=device.id,
-        nonce=x_nonce,
-    )
-
-    if not nonce_accepted:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Nonce already used",
-        )
-
-    # --------------------------------------------------
-    # Mise à jour dernière connexion
-    # --------------------------------------------------
-
-    device.last_seen = datetime.now(timezone.utc)
-
-    database.commit()
-
-    return {
-        "authenticated": True,
-        "device_uid": device.device_uid,
-        "message": "ESP32-C3 authenticated successfully",
-    }
 
 @router.get(
     "/{device_id}",
@@ -283,104 +187,3 @@ def get_device(
         )
 
     return device
-
-@router.post(
-    "/local-auth",
-    status_code=status.HTTP_200_OK,
-)
-def local_auth(
-    request: Request,
-    x_device_uid: str = Header(...),
-    x_timestamp: str = Header(...),
-    x_nonce: str = Header(...),
-    x_rfid_uid: str = Header(...),
-    x_fingerprint_id: str = Header(...),
-    x_signature: str = Header(...),
-    database: Session = Depends(get_db),
-) -> dict:
-
-    normalized_device_uid = x_device_uid.strip().upper()
-    normalized_rfid_uid = x_rfid_uid.strip().upper()
-    fingerprint_id = x_fingerprint_id.strip()
-
-    device = database.scalar(
-        select(Device).where(
-            Device.device_uid == normalized_device_uid
-        )
-    )
-
-    if device is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unknown device",
-        )
-
-    if device.status != DeviceStatus.ACTIVE:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Device is not active",
-        )
-
-    if not device.rfid_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="RFID disabled",
-        )
-
-    if not device.fingerprint_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Fingerprint disabled",
-        )
-
-    if device.device_secret is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing device secret",
-        )
-
-    extra_data = (
-        normalized_rfid_uid
-        + "\n"
-        + fingerprint_id
-    )
-
-    valid = verify_device_hmac(
-        device_secret=device.device_secret,
-        method=request.method,
-        path=request.url.path,
-        timestamp=x_timestamp,
-        nonce=x_nonce,
-        received_signature=x_signature,
-        extra_data=extra_data,
-    )
-
-    if not valid:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid device authentication",
-        )
-
-    nonce_accepted = consume_nonce(
-        database=database,
-        device_id=device.id,
-        nonce=x_nonce,
-    )
-
-    if not nonce_accepted:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Nonce already used",
-        )
-
-    device.last_seen = datetime.now(timezone.utc)
-
-    database.commit()
-
-    return {
-        "authenticated": True,
-        "device_uid": device.device_uid,
-        "rfid_uid": normalized_rfid_uid,
-        "fingerprint_id": fingerprint_id,
-        "message": "Local authentication proof accepted",
-    }

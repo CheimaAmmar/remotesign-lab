@@ -21,9 +21,8 @@ def build_canonical_message(
         nonce,
     ]
 
-    # Important :
-    # on n'ajoute extra_data que lorsqu'il existe.
-    # Ainsi /auth-test reste compatible avec l'ancien firmware.
+    # On n'ajoute extra_data que lorsqu'il existe afin de préserver
+    # le format canonique des requêtes qui n'en fournissent pas.
     if extra_data:
         parts.append(extra_data)
 
@@ -100,7 +99,17 @@ def verify_device_hmac(
     # COMPARAISON SECURISEE
     # ==================================================
 
+    try:
+        received_signature_bytes = (
+            received_signature
+            .lower()
+            .encode("ascii")
+        )
+
+    except UnicodeEncodeError:
+        return False
+
     return hmac.compare_digest(
-        expected_signature,
-        received_signature.lower(),
+        expected_signature.encode("ascii"),
+        received_signature_bytes,
     )

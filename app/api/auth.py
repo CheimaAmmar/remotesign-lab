@@ -47,6 +47,11 @@ from app.services.audit_service import (
     add_audit_event,
     record_audit_event,
 )
+from app.services.signature_request_service import (
+    persist_terminal_signature_request_failure,
+    try_attach_authentication_session,
+    try_mark_signature_request_authenticated,
+)
 
 router = APIRouter(
     prefix="/api/v1/auth",
@@ -67,10 +72,21 @@ def reject_complete(
     device_id=None,
     session_id=None,
     document_id=None,
+    terminal_queue_failure: bool = False,
 ) -> None:
 
     # Libère notamment un éventuel FOR UPDATE.
     database.rollback()
+
+    if terminal_queue_failure and isinstance(
+        session_id,
+        uuid.UUID,
+    ):
+        persist_terminal_signature_request_failure(
+            database,
+            authentication_session_id=session_id,
+            failure_detail=audit_detail,
+        )
 
     record_audit_event(
         database,
@@ -617,6 +633,15 @@ def create_challenge(
     # avant l'événement d'audit.
     database.flush()
 
+    try_attach_authentication_session(
+        database,
+        device_id=device.id,
+        document_id=document.id,
+        document_hash=document.document_hash,
+        decision=decision,
+        authentication_session=auth_session,
+    )
+
     device.last_seen = now
 
     # ==================================================
@@ -1021,6 +1046,7 @@ def complete_authentication(
             status_code=status.HTTP_401_UNAUTHORIZED,
             response_detail="Challenge expired",
             audit_detail="Authentication challenge expired",
+            terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=auth_session.user_id,
             device_id=device.id,
@@ -1152,6 +1178,7 @@ def complete_authentication(
             status_code=status.HTTP_404_NOT_FOUND,
             response_detail="Document not found",
             audit_detail="Document referenced by authentication session not found",
+            terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=auth_session.user_id,
             device_id=device.id,
@@ -1165,6 +1192,7 @@ def complete_authentication(
             status_code=status.HTTP_403_FORBIDDEN,
             response_detail="Stored document hash mismatch",
             audit_detail="Stored document hash does not match authentication session",
+            terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=auth_session.user_id,
             device_id=device.id,
@@ -1201,6 +1229,7 @@ def complete_authentication(
             status_code=status.HTTP_403_FORBIDDEN,
             response_detail="RFID and fingerprint do not match",
             audit_detail="RFID/fingerprint credential mismatch",
+            terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=auth_session.user_id,
             device_id=device.id,
@@ -1224,6 +1253,7 @@ def complete_authentication(
             status_code=status.HTTP_403_FORBIDDEN,
             response_detail="User not found",
             audit_detail="Authentication session user not found",
+            terminal_queue_failure=True,
             source_ip=source_ip,
             device_id=device.id,
             session_id=auth_session.id,
@@ -1237,6 +1267,7 @@ def complete_authentication(
             status_code=status.HTTP_403_FORBIDDEN,
             response_detail="User disabled",
             audit_detail="Disabled user attempted strong authentication",
+            terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=user.id,
             device_id=device.id,
@@ -1273,6 +1304,11 @@ def complete_authentication(
     # ==================================================
 
     auth_session.verified_at = now
+
+    try_mark_signature_request_authenticated(
+        database,
+        authentication_session_id=auth_session.id,
+    )
 
     device.last_seen = now
 

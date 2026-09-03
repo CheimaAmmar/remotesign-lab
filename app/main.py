@@ -2,14 +2,22 @@ from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from starlette.staticfiles import StaticFiles
 
 from app.api.auth import router as auth_router
+from app.api.device_signature_requests import (
+    router as device_signature_requests_router,
+)
 from app.api.devices import router as devices_router
 from app.api.users import router as users_router
 from app.api.signing import router as signing_router
 
 from app.config import get_settings
 from app.database import get_db
+from app.web.routes import (
+    WEB_STATIC,
+    router as web_router,
+)
 
 from app.api.signatures import (
     router as signatures_router,
@@ -37,10 +45,17 @@ app = FastAPI(
 app.include_router(users_router)
 app.include_router(devices_router)
 app.include_router(auth_router)
+app.include_router(device_signature_requests_router)
 app.include_router(signing_router)
 app.include_router(documents_router)
 app.include_router(signatures_router)
 app.include_router(audit_router)
+app.mount(
+    "/ui/static",
+    StaticFiles(directory=WEB_STATIC),
+    name="ui-static",
+)
+app.include_router(web_router)
 
 
 @app.get("/", tags=["General"])

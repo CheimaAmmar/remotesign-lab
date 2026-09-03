@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Signer un document | Stage-HSM</title>
+  <link rel="stylesheet" href="/ui/static/styles.css">
+  <script src="/ui/static/app.js" defer></script>
+</head>
+<body class="app-page">
+  <header class="app-header">
+    <div class="header-inner">
+      <a class="brand brand-link" href="/ui" aria-label="Accueil Stage-HSM">
+        <span class="brand-mark" aria-hidden="true">SH</span>
+        <span>
+          <strong>Stage-HSM</strong>
+          <small>Signature locale</small>
+        </span>
+      </a>
+
+      <div class="session-actions">
+        <span id="session-indicator" class="session-indicator" role="status">Vérification de la session…</span>
+        <form id="logout-form" action="/ui/logout" method="post">
+          <button id="logout-button" class="button button-quiet" type="submit" disabled>Se déconnecter</button>
+        </form>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-shell">
+    <section class="intro" aria-labelledby="page-title">
+      <p class="eyebrow">Parcours de signature</p>
+      <h1 id="page-title">Préparer et signer un PDF</h1>
+      <p>Sélectionnez un document, déposez-le sur le serveur, puis lancez le flux d’authentification simulé sur l’ESP32.</p>
+    </section>
+
+    <div id="global-alert" class="alert" role="alert" aria-live="assertive" hidden></div>
+
+    <div class="workspace-grid">
+      <div class="primary-column">
+        <section class="panel" aria-labelledby="upload-title">
+          <div class="panel-heading">
+            <span class="step-number" aria-hidden="true">1</span>
+            <div>
+              <h2 id="upload-title">Choisir le document</h2>
+              <p>Format PDF, 20 Mio maximum.</p>
+            </div>
+          </div>
+
+          <form id="upload-form" class="upload-form" novalidate>
+            <label class="file-picker" for="pdf-file">
+              <span class="file-picker-title">Sélectionner un fichier PDF</span>
+              <span id="file-summary" class="file-picker-summary">Aucun document sélectionné</span>
+              <input id="pdf-file" name="file" type="file" accept="application/pdf,.pdf" required disabled>
+            </label>
+
+            <button id="upload-button" class="button button-primary" type="submit" disabled>Uploader le PDF</button>
+          </form>
+        </section>
+
+        <section id="document-panel" class="panel" aria-labelledby="document-title" hidden>
+          <div class="panel-heading">
+            <span class="step-number" aria-hidden="true">2</span>
+            <div>
+              <h2 id="document-title">Document prêt</h2>
+              <p>Empreinte calculée et vérifiée côté serveur.</p>
+            </div>
+          </div>
+
+          <dl class="document-details">
+            <div>
+              <dt>Nom du fichier</dt>
+              <dd id="document-filename">—</dd>
+            </div>
+            <div>
+              <dt>Taille</dt>
+              <dd id="document-size">—</dd>
+            </div>
+            <div>
+              <dt>Identifiant du document</dt>
+              <dd id="document-id" class="monospace breakable">—</dd>
+            </div>
+            <div>
+              <dt>Empreinte SHA-256</dt>
+              <dd id="document-hash" class="monospace breakable">—</dd>
+            </div>
+          </dl>
+
+          <div class="signature-action">
+            <div>
+              <h3>Lancer le contrôle d’identité</h3>
+              <p>Après ce clic, ESP32-001 récupère automatiquement l’identifiant et l’empreinte depuis sa file sécurisée.</p>
+            </div>
+            <button id="signature-button" class="button button-accent" type="button" disabled>Demander la signature</button>
+          </div>
+        </section>
+      </div>
+
+      <aside class="status-panel" aria-labelledby="status-title">
+        <p class="eyebrow">État actuel</p>
+        <h2 id="status-title">En attente d’un document</h2>
+        <p id="status-message" class="status-message" aria-live="polite">Choisissez un PDF pour commencer.</p>
+        <p id="queue-state-reference" class="request-reference" hidden>
+          État PostgreSQL : <strong id="queue-state" class="monospace">—</strong>
+        </p>
+
+        <ol class="state-list" aria-label="Progression de la demande">
+          <li data-state="DOCUMENT_SELECTED">
+            <span class="state-dot" aria-hidden="true"></span>
+            <span>Document sélectionné</span>
+          </li>
+          <li data-state="UPLOADING">
+            <span class="state-dot" aria-hidden="true"></span>
+            <span>Upload en cours</span>
+          </li>
+          <li data-state="DOCUMENT_READY">
+            <span class="state-dot" aria-hidden="true"></span>
+            <span>Document prêt</span>
+          </li>
+          <li data-state="WAITING_AUTHENTICATION">
+            <span class="state-dot" aria-hidden="true"></span>
+            <span>Attente d’authentification</span>
+          </li>
+          <li data-state="AUTHENTICATION_SUCCEEDED">
+            <span class="state-dot" aria-hidden="true"></span>
+            <span>Authentification réussie</span>
+          </li>
+          <li data-state="SIGNATURE_SUCCEEDED">
+            <span class="state-dot" aria-hidden="true"></span>
+            <span>Signature réussie</span>
+          </li>
+          <li data-state="SIGNATURE_REFUSED">
+            <span class="state-dot" aria-hidden="true"></span>
+            <span>Signature refusée</span>
+          </li>
+        </ol>
+
+        <p id="request-reference" class="request-reference monospace" hidden></p>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>

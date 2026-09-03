@@ -31,8 +31,8 @@ def require_admin(
     if (
         x_admin_key is None
         or not hmac.compare_digest(
-            x_admin_key,
-            expected_key,
+            x_admin_key.encode("utf-8"),
+            expected_key.encode("utf-8"),
         )
     ):
         raise HTTPException(

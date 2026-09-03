@@ -48,6 +48,10 @@ from app.services.audit_service import (
     add_audit_event,
     record_audit_event,
 )
+from app.services.signature_request_service import (
+    persist_terminal_signature_request_failure,
+    try_mark_signature_request_signed,
+)
 
 from app.security.rate_limit import (
     is_rate_limited,
@@ -91,11 +95,22 @@ def reject_sign(
     device_id=None,
     session_id=None,
     document_id=None,
+    terminal_queue_failure: bool = False,
 ) -> None:
 
     # Libère la transaction courante et notamment
     # un éventuel verrou SELECT ... FOR UPDATE.
     database.rollback()
+
+    if terminal_queue_failure and isinstance(
+        session_id,
+        uuid.UUID,
+    ):
+        persist_terminal_signature_request_failure(
+            database,
+            authentication_session_id=session_id,
+            failure_detail=audit_detail,
+        )
 
     record_audit_event(
         database,
@@ -573,6 +588,7 @@ def sign_document(
             status_code=status.HTTP_401_UNAUTHORIZED,
             response_detail="Signing authorization expired",
             audit_detail="Signing authorization expired",
+            terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=auth_session.user_id,
             device_id=device.id,
@@ -595,6 +611,7 @@ def sign_document(
             status_code=status.HTTP_404_NOT_FOUND,
             response_detail="Document not found",
             audit_detail="Signing document not found",
+            terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=auth_session.user_id,
             device_id=device.id,
@@ -611,6 +628,7 @@ def sign_document(
             status_code=status.HTTP_409_CONFLICT,
             response_detail="Stored document hash mismatch",
             audit_detail="Stored document hash mismatch",
+            terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=auth_session.user_id,
             device_id=device.id,
@@ -640,6 +658,7 @@ def sign_document(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             response_detail="Invalid stored document path",
             audit_detail="Invalid stored document path",
+            terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=auth_session.user_id,
             device_id=device.id,
@@ -653,6 +672,7 @@ def sign_document(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             response_detail="Stored document file not found",
             audit_detail="Stored document file missing",
+            terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=auth_session.user_id,
             device_id=device.id,
@@ -689,6 +709,7 @@ def sign_document(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             response_detail="Unable to read stored document",
             audit_detail="Unable to read stored document",
+            terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=auth_session.user_id,
             device_id=device.id,
@@ -712,6 +733,7 @@ def sign_document(
             audit_detail=(
                 "Stored document integrity verification failed"
             ),
+            terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=auth_session.user_id,
             device_id=device.id,
@@ -731,6 +753,7 @@ def sign_document(
             audit_detail=(
                 "Stored file does not match authenticated document"
             ),
+            terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=auth_session.user_id,
             device_id=device.id,
@@ -750,6 +773,7 @@ def sign_document(
             audit_detail=(
                 "Stored file does not match requested document hash"
             ),
+            terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=auth_session.user_id,
             device_id=device.id,
@@ -834,6 +858,12 @@ def sign_document(
     )
 
     database.flush()
+
+    try_mark_signature_request_signed(
+        database,
+        authentication_session_id=auth_session.id,
+        signature=signature_record,
+    )
 
     # ==================================================
     # CONSOMMATION SESSION
