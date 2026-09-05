@@ -1,0 +1,120 @@
+.user-shell {
+  max-width: 980px;
+}
+
+.user-document-list {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.user-document-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-subtle, #f8fafc);
+}
+
+.user-document-card h3 {
+  margin: 0 0 0.3rem;
+  overflow-wrap: anywhere;
+}
+
+.user-document-meta {
+  margin: 0 0 0.55rem;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.user-request-message,
+.user-signature-meta {
+  margin: 0.55rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.user-signature-meta {
+  overflow-wrap: anywhere;
+}
+
+.user-document-actions,
+.consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.user-state {
+  display: inline-flex;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.user-state-signed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.user-state-failed,
+.user-state-expired {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.consent-panel {
+  margin-top: 1rem;
+}
+
+.consent-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.consent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.consent-check input {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.1rem;
+}
+
+.user-request-status {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+#request-message {
+  white-space: pre-line;
+}
+
+.empty-state {
+  margin: 0;
+  color: var(--muted);
+}
+
+@media (max-width: 700px) {
+  .user-document-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

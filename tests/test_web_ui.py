@@ -4,6 +4,7 @@ import json
 import unittest
 import uuid
 
+from datetime import datetime, timezone
 from http.cookies import SimpleCookie
 from io import BytesIO
 from pathlib import Path
@@ -18,7 +19,12 @@ from starlette.requests import Request
 
 from app.config import get_settings
 from app.main import app
-from app.models import DeviceStatus, SignatureRequestStatus
+from app.models import (
+    Document,
+    DocumentSignature,
+    SignatureRequestStatus,
+    UserStatus,
+)
 from app.security import ui_session as ui_session_store
 from app.security.ui_session import (
     UI_SESSION_COOKIE_NAME,
@@ -29,13 +35,18 @@ from app.security.ui_session import (
     require_ui_csrf,
 )
 from app.services.document_service import store_document
+from app.services.signature_request_service import (
+    get_latest_signature_request_for_document,
+)
+from app.user_web.routes import router as user_web_router
 from app.web.routes import (
-    SignatureRequestCreate,
+    SIGNATURE_REQUEST_MESSAGES,
     create_web_session,
+    document_details_for_admin,
+    document_signature_request_status,
     login_page,
-    request_signature_from_web,
     router as web_router,
-    signature_request_status,
+    upload_document_from_web,
     web_interface,
 )
 
@@ -111,39 +122,32 @@ class FakeDocumentDatabase:
         self.refresh_count += 1
 
 
-class FakeStatusDatabase:
-    def __init__(self) -> None:
-        self.commit_count = 0
-
-    def commit(self) -> None:
-        self.commit_count += 1
-
-
-class FakeQueueCreationDatabase:
-    def __init__(self, document, device) -> None:
+class FakeAdminReadDatabase:
+    def __init__(self, document, signature=None) -> None:
         self.document = document
-        self.device = device
-        self.added = []
-        self.flush_count = 0
-        self.commit_count = 0
+        self.signature = signature
 
-    def get(self, _model, record_id):
-        if record_id == self.document.id:
+    def get(self, model, record_id):
+        if model is Document and record_id == self.document.id:
             return self.document
+
+        if (
+            model is DocumentSignature
+            and self.signature is not None
+            and record_id == self.signature.id
+        ):
+            return self.signature
 
         return None
 
-    def scalar(self, _statement):
-        return self.device
-
-    def add(self, record) -> None:
-        self.added.append(record)
+    def add(self, _record) -> None:
+        raise AssertionError("ADMIN status lookup must be read-only")
 
     def flush(self) -> None:
-        self.flush_count += 1
+        raise AssertionError("ADMIN status lookup must be read-only")
 
     def commit(self) -> None:
-        self.commit_count += 1
+        raise AssertionError("ADMIN status lookup must be read-only")
 
 
 class WebSessionSecurityTests(unittest.TestCase):
@@ -374,7 +378,7 @@ class WebAssetTests(unittest.TestCase):
             "Authentification réussie",
             "Signature réussie",
             "Signature refusée",
-            "Demander la signature",
+            "En attente d’une demande de signature depuis l’espace utilisateur.",
         ):
             self.assertIn(label, index + javascript)
 
@@ -389,6 +393,32 @@ class WebAssetTests(unittest.TestCase):
 
         for queue_state in SignatureRequestStatus:
             self.assertIn(queue_state.value, javascript)
+
+    def test_admin_interface_has_no_signature_request_action(
+        self,
+    ) -> None:
+        index = WEB_ASSETS[1].read_text(encoding="utf-8")
+        javascript = WEB_ASSETS[4].read_text(
+            encoding="utf-8"
+        )
+
+        for forbidden in (
+            "Demander la signature",
+            "signature-button",
+            "requestSignature",
+            'apiFetch("/ui/api/signature-requests"',
+        ):
+            self.assertNotIn(forbidden, index + javascript)
+
+        self.assertIn(
+            "/signature-request`",
+            javascript,
+        )
+        self.assertIn("restoreDocumentFromUrl", javascript)
+        self.assertIn(
+            'url.searchParams.set("document_id", documentId)',
+            javascript,
+        )
 
     def test_no_configured_secret_is_in_browser_assets(self) -> None:
         browser_content = "\n".join(
@@ -502,15 +532,53 @@ class DocumentServiceTests(unittest.TestCase):
 
 
 class SignatureRequestTests(unittest.TestCase):
-    def test_status_returns_each_persistent_queue_state(self) -> None:
-        ui_token, ui_session = create_ui_session()
-        self.addCleanup(delete_ui_session, ui_token)
+    def test_admin_uses_the_same_explicit_queue_messages(self) -> None:
+        expected = {
+            SignatureRequestStatus.PENDING: (
+                "Demande créée par l'utilisateur. "
+                "En attente d'authentification forte."
+            ),
+            SignatureRequestStatus.CLAIMED: (
+                "Demande récupérée par le terminal."
+            ),
+            SignatureRequestStatus.AUTHENTICATING: (
+                "Authentification forte en cours."
+            ),
+            SignatureRequestStatus.AUTHENTICATED: (
+                "Identité vérifiée. Signature cryptographique en cours."
+            ),
+            SignatureRequestStatus.SIGNED: (
+                "Signature réussie."
+            ),
+            SignatureRequestStatus.FAILED: "Signature refusée.",
+            SignatureRequestStatus.EXPIRED: (
+                "Demande expirée."
+            ),
+        }
+
+        self.assertEqual(SIGNATURE_REQUEST_MESSAGES, expected)
+
+    def test_status_by_document_returns_each_persistent_state(
+        self,
+    ) -> None:
+        _ui_token, ui_session = create_ui_session()
+        self.addCleanup(delete_ui_session, _ui_token)
         request_id = uuid.uuid4()
         document_id = uuid.uuid4()
         signature_id = uuid.uuid4()
+        signed_at = datetime.now(timezone.utc)
+        document = SimpleNamespace(id=document_id)
+        signature = SimpleNamespace(
+            id=signature_id,
+            algorithm="RSA-PKCS1-SHA256",
+            created_at=signed_at,
+        )
 
         for queue_state in SignatureRequestStatus:
-            database = FakeStatusDatabase()
+            database = FakeAdminReadDatabase(
+                document,
+                signature,
+            )
             request_record = SimpleNamespace(
                 id=request_id,
                 document_id=document_id,
@@ -524,95 +592,186 @@ class SignatureRequestTests(unittest.TestCase):
             )
 
             with patch(
-                "app.web.routes.get_owned_signature_request",
+                "app.web.routes.get_latest_signature_request_for_document",
                 return_value=request_record,
-            ):
-                response = signature_request_status(
-                    request_id,
+            ) as lookup:
+                response = document_signature_request_status(
+                    document_id,
                     ui_session,
                     database,
                 )
 
             payload = response_json(response)
             self.assertEqual(payload["state"], queue_state.value)
-            self.assertEqual(database.commit_count, 1)
+            lookup.assert_called_once_with(
+                database,
+                document_id=document_id,
+            )
 
             if queue_state == SignatureRequestStatus.SIGNED:
                 self.assertEqual(
                     payload["signature_id"],
                     str(signature_id),
                 )
+                self.assertEqual(
+                    payload["algorithm"],
+                    "RSA-PKCS1-SHA256",
+                )
+                self.assertEqual(
+                    payload["signed_at"],
+                    signed_at.isoformat(),
+                )
             else:
                 self.assertNotIn("signature_id", payload)
+                self.assertNotIn("algorithm", payload)
+                self.assertNotIn("signed_at", payload)
 
-    def test_status_is_scoped_to_the_web_session(self) -> None:
-        request_id = uuid.uuid4()
-        database = FakeStatusDatabase()
-        ui_session = SimpleNamespace(id="another-session")
+    def test_status_returns_204_when_user_has_made_no_request(
+        self,
+    ) -> None:
+        document = SimpleNamespace(id=uuid.uuid4())
+        database = FakeAdminReadDatabase(document)
+        ui_session = SimpleNamespace(id="admin-session")
 
         with patch(
-            "app.web.routes.get_owned_signature_request",
+            "app.web.routes.get_latest_signature_request_for_document",
             return_value=None,
         ) as lookup:
-            with self.assertRaises(HTTPException) as rejected:
-                signature_request_status(
-                    request_id,
-                    ui_session,
-                    database,
-                )
-
-        self.assertEqual(
-            rejected.exception.status_code,
-            status.HTTP_404_NOT_FOUND,
-        )
-        lookup.assert_called_once_with(
-            database,
-            request_id=request_id,
-            owner_session_id=ui_session.id,
-        )
-
-    def test_web_creation_targets_the_configured_device(self) -> None:
-        document = SimpleNamespace(
-            id=uuid.uuid4(),
-            document_hash="a" * 64,
-        )
-        device = SimpleNamespace(
-            id=uuid.uuid4(),
-            status=DeviceStatus.ACTIVE,
-            device_secret="present",
-        )
-        database = FakeQueueCreationDatabase(
-            document,
-            device,
-        )
-        request_record = SimpleNamespace(
-            id=uuid.uuid4(),
-            status=SignatureRequestStatus.PENDING,
-        )
-        ui_session = SimpleNamespace(id="web-session-owner")
-
-        with patch(
-            "app.web.routes.create_signature_request",
-            return_value=request_record,
-        ) as create_request:
-            response = request_signature_from_web(
-                SignatureRequestCreate(
-                    document_id=document.id,
-                    document_hash=document.document_hash,
-                ),
+            response = document_signature_request_status(
+                document.id,
                 ui_session,
                 database,
             )
 
-        payload = response_json(response)
-        self.assertEqual(payload["state"], "PENDING")
-        self.assertEqual(database.flush_count, 1)
-        self.assertEqual(database.commit_count, 1)
-        create_request.assert_called_once_with(
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.body, b"")
+        lookup.assert_called_once_with(
             database,
-            owner_session_id=ui_session.id,
-            device=device,
-            document=document,
+            document_id=document.id,
+        )
+
+    def test_latest_request_lookup_is_ordered_and_read_only(
+        self,
+    ) -> None:
+        class CapturingDatabase:
+            def __init__(self) -> None:
+                self.statement = None
+                self.record = object()
+
+            def scalar(self, statement):
+                self.statement = statement
+                return self.record
+
+        database = CapturingDatabase()
+        document_id = uuid.uuid4()
+
+        result = get_latest_signature_request_for_document(
+            database,
+            document_id=document_id,
+        )
+
+        statement = str(database.statement).upper()
+        self.assertIs(result, database.record)
+        self.assertIn("ORDER BY SIGNATURE_REQUESTS.CREATED_AT DESC", statement)
+        self.assertIn("SIGNATURE_REQUESTS.ID DESC", statement)
+        self.assertNotIn("FOR UPDATE", statement)
+
+    def test_admin_upload_assigns_owner_without_creating_request(
+        self,
+    ) -> None:
+        user = SimpleNamespace(
+            id=uuid.uuid4(),
+            status=UserStatus.ACTIVE,
+        )
+        database = SimpleNamespace(
+            get=lambda _model, record_id: (
+                user if record_id == user.id else None
+            ),
+        )
+        upload = UploadFile(
+            file=BytesIO(b"%PDF-1.7\n%%EOF\n"),
+            filename="admin-upload.pdf",
+            headers=Headers({"content-type": "application/pdf"}),
+        )
+        document_id = uuid.uuid4()
+        stored = {
+            "document_id": str(document_id),
+            "filename": "admin-upload.pdf",
+            "size_bytes": 17,
+            "document_hash": "a" * 64,
+            "algorithm": "SHA-256",
+            "message": "Document uploaded and hashed successfully",
+        }
+
+        with patch(
+            "app.web.routes.store_document",
+            return_value=stored.copy(),
+        ) as store:
+            response = upload_document_from_web(
+                upload,
+                user.id,
+                SimpleNamespace(id="admin-session"),
+                database,
+            )
+
+        payload = response_json(response)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(payload["document_id"], str(document_id))
+        self.assertEqual(payload["user_id"], str(user.id))
+        self.assertIn("Document attribué", payload["message"])
+        self.assertNotIn("request_id", payload)
+        self.assertNotIn("consented_at", payload)
+        self.assertNotIn("consent_version", payload)
+        store.assert_called_once_with(
+            file=upload,
+            database=database,
+            user_id=user.id,
+        )
+
+    def test_admin_document_can_be_restored_from_database(self) -> None:
+        document = SimpleNamespace(
+            id=uuid.uuid4(),
+            original_filename="contrat.pdf",
+            size_bytes=1234,
+            document_hash="b" * 64,
+            user_id=uuid.uuid4(),
+        )
+        response = document_details_for_admin(
+            document.id,
+            SimpleNamespace(id="admin-session"),
+            FakeAdminReadDatabase(document),
+        )
+        payload = response_json(response)
+
+        self.assertEqual(payload["document_id"], str(document.id))
+        self.assertEqual(payload["user_id"], str(document.user_id))
+        self.assertEqual(payload["filename"], "contrat.pdf")
+
+    def test_admin_routes_have_no_request_creation_or_consent(
+        self,
+    ) -> None:
+        source = (
+            PROJECT_ROOT / "app/web/routes.py"
+        ).read_text(encoding="utf-8")
+        route_methods = {
+            (route.path, method)
+            for route in web_router.routes
+            for method in route.methods
+        }
+
+        self.assertNotIn(
+            ("/ui/api/signature-requests", "POST"),
+            route_methods,
+        )
+        self.assertNotIn("consented_at", source)
+        self.assertNotIn("consent_version", source)
+        self.assertNotIn("create_signature_request", source)
+        self.assertTrue(
+            any(
+                route.path == "/user/api/signature-requests"
+                and "POST" in route.methods
+                for route in user_web_router.routes
+            )
         )
 
 
@@ -621,7 +780,6 @@ class OpenApiIsolationTests(unittest.TestCase):
         protected_routes = {
             ("/ui/logout", "POST"),
             ("/ui/api/documents/upload", "POST"),
-            ("/ui/api/signature-requests", "POST"),
         }
 
         for path, method in protected_routes:
@@ -638,6 +796,31 @@ class OpenApiIsolationTests(unittest.TestCase):
             }
             self.assertIn(
                 "require_ui_csrf",
+                dependency_names,
+            )
+
+    def test_admin_document_reads_require_admin_session(self) -> None:
+        protected_routes = {
+            ("/ui/api/documents/{document_id}", "GET"),
+            (
+                "/ui/api/documents/{document_id}/signature-request",
+                "GET",
+            ),
+        }
+
+        for path, method in protected_routes:
+            route = next(
+                candidate
+                for candidate in web_router.routes
+                if candidate.path == path
+                and method in candidate.methods
+            )
+            dependency_names = {
+                dependency.call.__name__
+                for dependency in route.dependant.dependencies
+            }
+            self.assertIn(
+                "require_ui_session",
                 dependency_names,
             )
 

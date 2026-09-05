@@ -18,6 +18,10 @@ from app.web.routes import (
     WEB_STATIC,
     router as web_router,
 )
+from app.user_web.routes import (
+    USER_WEB_STATIC,
+    router as user_web_router,
+)
 
 from app.api.signatures import (
     router as signatures_router,
@@ -56,6 +60,12 @@ app.mount(
     name="ui-static",
 )
 app.include_router(web_router)
+app.mount(
+    "/user/static",
+    StaticFiles(directory=USER_WEB_STATIC),
+    name="user-static",
+)
+app.include_router(user_web_router)
 
 
 @app.get("/", tags=["General"])

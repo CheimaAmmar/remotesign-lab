@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from app.models import DeviceStatus, UserStatus
 
@@ -22,6 +22,34 @@ class UserCreate(BaseModel):
         examples=["Lina Mouna"],
     )
 
+    email: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=320,
+        examples=["lina@example.test"],
+    )
+
+    password: SecretStr | None = Field(
+        default=None,
+        min_length=12,
+        max_length=128,
+    )
+
+
+class UserCredentialsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(
+        min_length=3,
+        max_length=320,
+        examples=["lina@example.test"],
+    )
+
+    password: SecretStr = Field(
+        min_length=12,
+        max_length=128,
+    )
+
 
 class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -29,6 +57,7 @@ class UserRead(BaseModel):
     id: uuid.UUID
     username: str
     full_name: str
+    email: str | None
     status: UserStatus
     created_at: datetime
 

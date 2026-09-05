@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>Signer un document | Stage-HSM</title>
+  <title>Administration des documents | Stage-HSM</title>
   <link rel="stylesheet" href="/ui/static/styles.css">
   <script src="/ui/static/app.js" defer></script>
 </head>
@@ -30,9 +30,9 @@
 
   <main class="page-shell">
     <section class="intro" aria-labelledby="page-title">
-      <p class="eyebrow">Parcours de signature</p>
-      <h1 id="page-title">Préparer et signer un PDF</h1>
-      <p>Sélectionnez un document, déposez-le sur le serveur, puis lancez le flux d’authentification simulé sur l’ESP32.</p>
+      <p class="eyebrow">Administration des documents</p>
+      <h1 id="page-title">Préparer et attribuer un PDF</h1>
+      <p>Déposez le document et attribuez-le à son propriétaire. La demande de signature sera créée uniquement depuis l’espace utilisateur.</p>
     </section>
 
     <div id="global-alert" class="alert" role="alert" aria-live="assertive" hidden></div>
@@ -49,6 +49,14 @@
           </div>
 
           <form id="upload-form" class="upload-form" novalidate>
+            <div class="field">
+              <label for="document-owner">Propriétaire du document</label>
+              <select id="document-owner" name="user_id" required disabled>
+                <option value="">Sélectionner un utilisateur actif</option>
+              </select>
+              <p class="field-hint">Ce propriétaire sera le seul utilisateur autorisé à consulter et demander la signature du PDF.</p>
+            </div>
+
             <label class="file-picker" for="pdf-file">
               <span class="file-picker-title">Sélectionner un fichier PDF</span>
               <span id="file-summary" class="file-picker-summary">Aucun document sélectionné</span>
@@ -89,10 +97,10 @@
 
           <div class="signature-action">
             <div>
-              <h3>Lancer le contrôle d’identité</h3>
-              <p>Après ce clic, ESP32-001 récupère automatiquement l’identifiant et l’empreinte depuis sa file sécurisée.</p>
+              <h3>Consentement utilisateur requis</h3>
+              <p>Document attribué à l’utilisateur.</p>
+              <p>En attente d’une demande de signature depuis l’espace utilisateur.</p>
             </div>
-            <button id="signature-button" class="button button-accent" type="button" disabled>Demander la signature</button>
           </div>
         </section>
       </div>

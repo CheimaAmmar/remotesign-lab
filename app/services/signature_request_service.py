@@ -63,16 +63,32 @@ def create_signature_request(
     database: Session,
     *,
     owner_session_id: str,
+    user_id: uuid.UUID,
     device: Device,
     document: Document,
+    consented_at: datetime | None = None,
+    consent_version: str | None = None,
 ) -> SignatureRequest:
+    document_user_id = getattr(document, "user_id", None)
+
+    if (
+        document_user_id is not None
+        and document_user_id != user_id
+    ):
+        raise ValueError(
+            "Document does not belong to the requesting user"
+        )
+
     now = utc_now()
     signature_request = SignatureRequest(
         owner_session_id=owner_session_id,
+        user_id=user_id,
         device_id=device.id,
         document_id=document.id,
         document_hash=document.document_hash,
         decision="APPROVE",
+        consented_at=consented_at,
+        consent_version=consent_version,
         status=SignatureRequestStatus.PENDING,
         expires_at=(
             now
@@ -222,6 +238,53 @@ def get_owned_signature_request(
     _expire_if_needed(
         signature_request,
         now=now,
+    )
+
+    return signature_request
+
+
+def get_user_signature_request(
+    database: Session,
+    *,
+    request_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> SignatureRequest | None:
+    signature_request = database.scalar(
+        select(SignatureRequest)
+        .where(
+            SignatureRequest.id == request_id,
+            SignatureRequest.user_id == user_id,
+        )
+        .with_for_update()
+    )
+
+    if signature_request is None:
+        return None
+
+    _expire_if_needed(
+        signature_request,
+        now=utc_now(),
+    )
+
+    return signature_request
+
+
+def get_latest_signature_request_for_document(
+    database: Session,
+    *,
+    document_id: uuid.UUID,
+) -> SignatureRequest | None:
+    """Return the latest request for ADMIN read-only monitoring."""
+    signature_request = database.scalar(
+        select(SignatureRequest)
+        .where(
+            SignatureRequest.document_id == document_id,
+        )
+        .order_by(
+            SignatureRequest.created_at.desc(),
+            SignatureRequest.id.desc(),
+        )
+        .limit(1)
     )
 
     return signature_request
@@ -483,13 +546,61 @@ def _run_optional_queue_hook(
         # before this revision's table has been migrated. Any other queue
         # database error must abort the surrounding auth/sign transaction
         # instead of silently leaving its state behind.
-        if sqlstate != "42P01":
+        if sqlstate not in ("42P01", "42703"):
             raise
 
         logger.warning(
-            "Signature queue table is not migrated yet; "
+            "Signature queue schema is not migrated yet; "
             "skipping state synchronization"
         )
+
+
+def signature_request_is_authorized_for_session(
+    database: Session,
+    *,
+    authentication_session: AuthenticationSession,
+    expected_status: SignatureRequestStatus,
+) -> bool:
+    authorized = False
+
+    def check_authorization() -> None:
+        nonlocal authorized
+        signature_request = database.scalar(
+            select(SignatureRequest)
+            .where(
+                SignatureRequest.authentication_session_id
+                == authentication_session.id,
+            )
+            .with_for_update()
+        )
+
+        if signature_request is None:
+            return
+
+        now = utc_now()
+        consent_version = signature_request.consent_version
+        authorized = (
+            signature_request.status == expected_status
+            and signature_request.expires_at > now
+            and signature_request.user_id is not None
+            and signature_request.user_id
+            == authentication_session.user_id
+            and signature_request.consented_at is not None
+            and isinstance(consent_version, str)
+            and bool(consent_version.strip())
+            and signature_request.device_id
+            == authentication_session.device_id
+            and signature_request.document_id
+            == authentication_session.document_id
+            and signature_request.document_hash
+            == authentication_session.document_hash
+            and signature_request.decision
+            == authentication_session.decision
+        )
+
+    _run_optional_queue_hook(database, check_authorization)
+
+    return authorized
 
 
 def try_attach_authentication_session(

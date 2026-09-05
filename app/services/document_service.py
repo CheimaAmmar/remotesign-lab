@@ -17,6 +17,8 @@ MAX_DOCUMENT_SIZE = 20 * 1024 * 1024
 def store_document(
     file: UploadFile,
     database: Session,
+    *,
+    user_id: uuid.UUID | None = None,
 ) -> dict:
     original_filename = file.filename or "document.pdf"
 
@@ -89,6 +91,7 @@ def store_document(
         content_type=file.content_type,
         size_bytes=total_size,
         document_hash=sha256.hexdigest(),
+        user_id=user_id,
     )
 
     database.add(document)

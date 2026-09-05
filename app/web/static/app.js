@@ -21,11 +21,11 @@ const STATE_COPY = Object.freeze({
   },
   [STATES.DOCUMENT_READY]: {
     title: "Document prêt",
-    message: "Le document est enregistré. Vous pouvez demander sa signature.",
+    message: "En attente d’une demande de signature depuis l’espace utilisateur.",
   },
   [STATES.WAITING_AUTHENTICATION]: {
     title: "Attente d’authentification",
-    message: "L’interface attend le flux ESP32 simulé RFID et DY50.",
+    message: "Demande créée par l’utilisateur. En attente d’authentification forte.",
   },
   [STATES.AUTHENTICATION_SUCCEEDED]: {
     title: "Authentification réussie",
@@ -33,7 +33,7 @@ const STATE_COPY = Object.freeze({
   },
   [STATES.SIGNATURE_SUCCEEDED]: {
     title: "Signature réussie",
-    message: "Le document a été signé avec succès.",
+    message: "Signature réussie.",
   },
   [STATES.SIGNATURE_REFUSED]: {
     title: "Signature refusée",
@@ -58,16 +58,17 @@ const REQUEST_TO_UI_STATE = Object.freeze({
 });
 
 const REQUEST_STATE_MESSAGES = Object.freeze({
-  PENDING: "La demande attend d’être récupérée par ESP32-001.",
-  CLAIMED: "ESP32-001 a récupéré la demande de signature.",
-  AUTHENTICATING: "Le contrôle RFID et DY50 est en cours.",
-  AUTHENTICATED: "L’authentification a réussi. La signature est en cours.",
-  SIGNED: "Le document a été signé avec succès.",
-  FAILED: "La demande de signature a échoué ou a été refusée.",
-  EXPIRED: "La demande de signature a expiré.",
+  PENDING: "Demande créée par l’utilisateur. En attente d’authentification forte.",
+  CLAIMED: "Demande récupérée par le terminal.",
+  AUTHENTICATING: "Authentification forte en cours.",
+  AUTHENTICATED: "Identité vérifiée. Signature cryptographique en cours.",
+  SIGNED: "Signature réussie.",
+  FAILED: "Signature refusée.",
+  EXPIRED: "Demande expirée.",
 });
 
 const POLL_DELAY_MS = 1500;
+const TERMINAL_POLL_DELAY_MS = 5000;
 const MAX_DOCUMENT_SIZE = 20 * 1024 * 1024;
 
 const elements = {
@@ -76,6 +77,7 @@ const elements = {
   logoutForm: document.getElementById("logout-form"),
   logoutButton: document.getElementById("logout-button"),
   uploadForm: document.getElementById("upload-form"),
+  ownerSelect: document.getElementById("document-owner"),
   fileInput: document.getElementById("pdf-file"),
   fileSummary: document.getElementById("file-summary"),
   uploadButton: document.getElementById("upload-button"),
@@ -84,7 +86,6 @@ const elements = {
   documentSize: document.getElementById("document-size"),
   documentId: document.getElementById("document-id"),
   documentHash: document.getElementById("document-hash"),
-  signatureButton: document.getElementById("signature-button"),
   statusTitle: document.getElementById("status-title"),
   statusMessage: document.getElementById("status-message"),
   stateItems: Array.from(document.querySelectorAll("[data-state]")),
@@ -193,7 +194,6 @@ function resetDocument() {
   elements.documentSize.textContent = "—";
   elements.documentId.textContent = "—";
   elements.documentHash.textContent = "—";
-  elements.signatureButton.disabled = true;
   reachedStates.clear();
 }
 
@@ -266,6 +266,49 @@ function validateDocumentResponse(payload) {
   );
 }
 
+function updateSelectedDocumentUrl(documentId) {
+  const url = new URL(window.location.href);
+
+  if (documentId) {
+    url.searchParams.set("document_id", documentId);
+  } else {
+    url.searchParams.delete("document_id");
+  }
+
+  window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+}
+
+async function restoreDocumentFromUrl() {
+  const documentId = new URL(window.location.href).searchParams.get("document_id");
+
+  if (!documentId) {
+    return;
+  }
+
+  const response = await apiFetch(`/ui/api/documents/${encodeURIComponent(documentId)}`, {
+    method: "GET",
+  });
+  const payload = await readJson(response);
+
+  if (!response.ok || !validateDocumentResponse(payload)) {
+    updateSelectedDocumentUrl(null);
+    throw new Error(errorMessage(payload, "Impossible de restaurer le document sélectionné."));
+  }
+
+  currentDocument = payload;
+  displayDocument(payload);
+  setState(
+    STATES.DOCUMENT_READY,
+    "En attente d’une demande de signature depuis l’espace utilisateur.",
+  );
+
+  if (typeof payload.user_id === "string") {
+    elements.ownerSelect.value = payload.user_id;
+  }
+
+  startDocumentPolling(payload.document_id);
+}
+
 async function loadSession() {
   try {
     const response = await fetch("/ui/api/session", {
@@ -289,8 +332,9 @@ async function loadSession() {
 
     csrfToken = payload.csrf_token;
     elements.sessionIndicator.textContent = "Session sécurisée active";
-    elements.fileInput.disabled = false;
     elements.logoutButton.disabled = false;
+    await loadAssignableUsers();
+    await restoreDocumentFromUrl();
   } catch (error) {
     if (!(error instanceof SessionExpiredError)) {
       showAlert("Impossible de vérifier la session. Vérifiez la connexion au serveur.");
@@ -299,9 +343,36 @@ async function loadSession() {
   }
 }
 
+async function loadAssignableUsers() {
+  const response = await apiFetch("/ui/api/users", { method: "GET" });
+  const payload = await readJson(response);
+
+  if (!response.ok || !payload || !Array.isArray(payload.users)) {
+    throw new Error("Impossible de charger les utilisateurs actifs.");
+  }
+
+  for (const user of payload.users) {
+    const option = document.createElement("option");
+    option.value = String(user.user_id);
+    option.textContent = user.email
+      ? `${user.full_name} · ${user.email}`
+      : `${user.full_name} · accès Web non configuré`;
+    elements.ownerSelect.append(option);
+  }
+
+  const hasUsers = payload.users.length > 0;
+  elements.ownerSelect.disabled = !hasUsers;
+  elements.fileInput.disabled = !hasUsers;
+
+  if (!hasUsers) {
+    showAlert("Créez d’abord un utilisateur actif depuis l’API ADMIN.");
+  }
+}
+
 function handleFileSelection() {
   clearAlert();
   resetDocument();
+  updateSelectedDocumentUrl(null);
   selectedFile = elements.fileInput.files && elements.fileInput.files[0]
     ? elements.fileInput.files[0]
     : null;
@@ -346,13 +417,20 @@ async function uploadDocument(event) {
     return;
   }
 
+  if (!elements.ownerSelect.value) {
+    showAlert("Sélectionnez le propriétaire du document.");
+    return;
+  }
+
   clearAlert();
   setState(STATES.UPLOADING);
   elements.fileInput.disabled = true;
+  elements.ownerSelect.disabled = true;
   elements.uploadButton.disabled = true;
 
   const formData = new FormData();
   formData.append("file", selectedFile, selectedFile.name);
+  formData.append("user_id", elements.ownerSelect.value);
 
   try {
     const response = await apiFetch("/ui/api/documents/upload", {
@@ -372,7 +450,8 @@ async function uploadDocument(event) {
     currentDocument = payload;
     displayDocument(payload);
     setState(STATES.DOCUMENT_READY, typeof payload.message === "string" ? payload.message : undefined);
-    elements.signatureButton.disabled = false;
+    updateSelectedDocumentUrl(payload.document_id);
+    startDocumentPolling(payload.document_id);
   } catch (error) {
     if (!(error instanceof SessionExpiredError)) {
       showAlert(error instanceof Error ? error.message : "L’upload a échoué.");
@@ -382,13 +461,14 @@ async function uploadDocument(event) {
     }
   } finally {
     elements.fileInput.disabled = false;
+    elements.ownerSelect.disabled = false;
   }
 }
 
-function schedulePoll(requestId, generation) {
+function scheduleDocumentPoll(documentId, generation, delay = POLL_DELAY_MS) {
   pollingTimer = window.setTimeout(() => {
-    pollSignatureRequest(requestId, generation);
-  }, POLL_DELAY_MS);
+    pollDocumentSignatureRequest(documentId, generation);
+  }, delay);
 }
 
 function applyRequestState(payload) {
@@ -412,26 +492,66 @@ function applyRequestState(payload) {
   );
 }
 
-async function pollSignatureRequest(requestId, generation) {
+function formatDateTime(value) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleString("fr-FR");
+}
+
+function displayRequestMetadata(payload) {
+  const details = [`Demande : ${payload.request_id}`];
+
+  if (typeof payload.signature_id === "string") {
+    details.push(`Signature : ${payload.signature_id}`);
+  }
+
+  if (typeof payload.signed_at === "string") {
+    details.push(`Date : ${formatDateTime(payload.signed_at)}`);
+  }
+
+  if (typeof payload.algorithm === "string") {
+    details.push(`Algorithme : ${payload.algorithm}`);
+  }
+
+  elements.requestReference.textContent = details.join("\n");
+  elements.requestReference.hidden = false;
+}
+
+function startDocumentPolling(documentId) {
+  resetRequest();
+  const generation = pollingGeneration;
+  pollDocumentSignatureRequest(documentId, generation);
+}
+
+async function pollDocumentSignatureRequest(documentId, generation) {
   if (generation !== pollingGeneration) {
     return;
   }
 
   try {
-    const response = await apiFetch(`/ui/api/signature-requests/${encodeURIComponent(requestId)}`, {
+    const response = await apiFetch(`/ui/api/documents/${encodeURIComponent(documentId)}/signature-request`, {
       method: "GET",
     });
-    const payload = await readJson(response);
 
-    if (response.status === 404) {
-      const message = "La demande de signature a expiré. Vous pouvez la relancer.";
-      setState(STATES.SIGNATURE_REFUSED, message);
-      showAlert(message);
-      pollingTimer = null;
-      elements.fileInput.disabled = false;
-      elements.signatureButton.disabled = false;
+    if (response.status === 204) {
+      clearAlert();
+      elements.queueState.textContent = "—";
+      elements.queueStateReference.hidden = true;
+      elements.requestReference.textContent = "";
+      elements.requestReference.hidden = true;
+      setState(
+        STATES.DOCUMENT_READY,
+        "En attente d’une demande de signature depuis l’espace utilisateur.",
+      );
+      scheduleDocumentPoll(documentId, generation);
       return;
     }
+
+    const payload = await readJson(response);
 
     if (!response.ok) {
       throw new Error(errorMessage(payload, "Impossible de lire l’état de la demande."));
@@ -442,73 +562,21 @@ async function pollSignatureRequest(requestId, generation) {
     }
 
     clearAlert();
+    displayRequestMetadata(payload);
 
     if (TERMINAL_STATES.has(payload.state)) {
-      pollingTimer = null;
-      elements.fileInput.disabled = false;
-      elements.signatureButton.disabled = payload.state === "SIGNED";
+      scheduleDocumentPoll(documentId, generation, TERMINAL_POLL_DELAY_MS);
       return;
     }
 
-    schedulePoll(requestId, generation);
+    scheduleDocumentPoll(documentId, generation);
   } catch (error) {
     if (error instanceof SessionExpiredError || generation !== pollingGeneration) {
       return;
     }
 
     showAlert(error instanceof Error ? error.message : "Le suivi de la demande a échoué.");
-    schedulePoll(requestId, generation);
-  }
-}
-
-async function requestSignature() {
-  if (!currentDocument) {
-    showAlert("Uploadez un document avant de demander sa signature.");
-    return;
-  }
-
-  clearAlert();
-  resetRequest();
-  elements.signatureButton.disabled = true;
-  elements.fileInput.disabled = true;
-  elements.uploadButton.disabled = true;
-  setState(STATES.WAITING_AUTHENTICATION);
-
-  try {
-    const response = await apiFetch("/ui/api/signature-requests", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        document_id: currentDocument.document_id,
-        document_hash: currentDocument.document_hash,
-      }),
-    });
-    const payload = await readJson(response);
-
-    if (!response.ok) {
-      throw new Error(errorMessage(payload, "La demande de signature a été refusée."));
-    }
-
-    if (!payload || typeof payload.request_id !== "string" || !applyRequestState(payload)) {
-      throw new Error("La réponse du serveur pour la demande est incomplète.");
-    }
-
-    elements.requestReference.textContent = `Demande : ${payload.request_id}`;
-    elements.requestReference.hidden = false;
-
-    const generation = pollingGeneration;
-
-    if (!TERMINAL_STATES.has(payload.state)) {
-      schedulePoll(payload.request_id, generation);
-    }
-  } catch (error) {
-    if (!(error instanceof SessionExpiredError)) {
-      const message = error instanceof Error ? error.message : "La demande de signature a échoué.";
-      showAlert(message);
-      setState(STATES.SIGNATURE_REFUSED, message);
-      elements.fileInput.disabled = false;
-      elements.signatureButton.disabled = false;
-    }
+    scheduleDocumentPoll(documentId, generation, TERMINAL_POLL_DELAY_MS);
   }
 }
 
@@ -537,7 +605,6 @@ async function logout(event) {
 
 elements.fileInput.addEventListener("change", handleFileSelection);
 elements.uploadForm.addEventListener("submit", uploadDocument);
-elements.signatureButton.addEventListener("click", requestSignature);
 elements.logoutForm.addEventListener("submit", logout);
 
 loadSession();

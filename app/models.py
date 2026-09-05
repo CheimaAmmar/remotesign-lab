@@ -63,6 +63,18 @@ class User(Base):
         nullable=False,
     )
 
+    email: Mapped[str | None] = mapped_column(
+        String(320),
+        unique=True,
+        nullable=True,
+        index=True,
+    )
+
+    password_hash: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
     status: Mapped[UserStatus] = mapped_column(
         Enum(
             UserStatus,
@@ -82,6 +94,16 @@ class User(Base):
     devices: Mapped[list["Device"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
+    )
+
+    documents: Mapped[list["Document"]] = relationship(
+        back_populates="user",
+    )
+
+    signature_requests: Mapped[
+        list["SignatureRequest"]
+    ] = relationship(
+        back_populates="user",
     )
 
 
@@ -461,10 +483,24 @@ class Document(Base):
         index=True,
     )
 
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "users.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+
+    user: Mapped["User | None"] = relationship(
+        back_populates="documents",
     )
 
 class DocumentSignature(Base):
@@ -594,6 +630,16 @@ class SignatureRequest(Base):
         nullable=False,
     )
 
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "users.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
     device_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(
@@ -661,6 +707,16 @@ class SignatureRequest(Base):
         nullable=True,
     )
 
+    consented_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    consent_version: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -698,4 +754,8 @@ class SignatureRequest(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+
+    user: Mapped["User"] = relationship(
+        back_populates="signature_requests",
     )

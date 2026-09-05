@@ -29,6 +29,7 @@ from app.models import (
     DeviceStatus,
     Document,
     DocumentSignature,
+    SignatureRequestStatus,
 )
 
 from app.security.device_auth import (
@@ -50,6 +51,7 @@ from app.services.audit_service import (
 )
 from app.services.signature_request_service import (
     persist_terminal_signature_request_failure,
+    signature_request_is_authorized_for_session,
     try_mark_signature_request_signed,
 )
 
@@ -443,6 +445,32 @@ def sign_document(
             status_code=status.HTTP_403_FORBIDDEN,
             response_detail="Authentication session/device mismatch",
             audit_detail="Signing session/device mismatch",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=auth_session.document_id,
+        )
+
+    # ==================================================
+    # USER DE LA DEMANDE WEB
+    # ==================================================
+
+    if not signature_request_is_authorized_for_session(
+        database,
+        authentication_session=auth_session,
+        expected_status=SignatureRequestStatus.AUTHENTICATED,
+    ):
+        reject_sign(
+            database,
+            status_code=status.HTTP_403_FORBIDDEN,
+            response_detail=(
+                "Signature request is not authorized"
+            ),
+            audit_detail=(
+                "Missing consent or signature request identity/document mismatch"
+            ),
+            terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=auth_session.user_id,
             device_id=device.id,

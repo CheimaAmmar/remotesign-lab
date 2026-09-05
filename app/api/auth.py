@@ -28,6 +28,7 @@ from app.models import (
     Device,
     DeviceStatus,
     Document,
+    SignatureRequestStatus,
     User,
     UserStatus,
 )
@@ -49,6 +50,7 @@ from app.services.audit_service import (
 )
 from app.services.signature_request_service import (
     persist_terminal_signature_request_failure,
+    signature_request_is_authorized_for_session,
     try_attach_authentication_session,
     try_mark_signature_request_authenticated,
 )
@@ -1267,6 +1269,32 @@ def complete_authentication(
             status_code=status.HTTP_403_FORBIDDEN,
             response_detail="User disabled",
             audit_detail="Disabled user attempted strong authentication",
+            terminal_queue_failure=True,
+            source_ip=source_ip,
+            user_id=user.id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=auth_session.document_id,
+        )
+
+    # ==================================================
+    # USER DE LA DEMANDE WEB
+    # ==================================================
+
+    if not signature_request_is_authorized_for_session(
+        database,
+        authentication_session=auth_session,
+        expected_status=SignatureRequestStatus.AUTHENTICATING,
+    ):
+        reject_complete(
+            database,
+            status_code=status.HTTP_403_FORBIDDEN,
+            response_detail=(
+                "Signature request is not authorized"
+            ),
+            audit_detail=(
+                "Missing consent or signature request identity/document mismatch"
+            ),
             terminal_queue_failure=True,
             source_ip=source_ip,
             user_id=user.id,

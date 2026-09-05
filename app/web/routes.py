@@ -1,4 +1,3 @@
-import hmac
 import uuid
 
 from pathlib import Path
@@ -20,17 +19,16 @@ from fastapi.responses import (
     RedirectResponse,
     Response,
 )
-from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.database import get_db
 from app.models import (
-    Device,
-    DeviceStatus,
     Document,
+    DocumentSignature,
     SignatureRequestStatus,
+    User,
+    UserStatus,
 )
 from app.security.admin_auth import require_admin
 from app.security.ui_session import (
@@ -45,18 +43,14 @@ from app.security.ui_session import (
     require_ui_session,
 )
 from app.services.document_service import store_document
-from app.services.audit_service import add_audit_event
 from app.services.signature_request_service import (
-    create_signature_request,
-    get_owned_signature_request,
+    get_latest_signature_request_for_document,
 )
 
 
 WEB_ROOT = Path(__file__).resolve().parent
 WEB_TEMPLATES = WEB_ROOT / "templates"
 WEB_STATIC = WEB_ROOT / "static"
-
-settings = get_settings()
 
 PAGE_SECURITY_HEADERS = {
     "Cache-Control": "no-store",
@@ -93,38 +87,63 @@ router = APIRouter(
 )
 
 
-class SignatureRequestCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    document_id: uuid.UUID
-    document_hash: str = Field(
-        pattern=r"^[0-9a-fA-F]{64}$",
-    )
-
-
 SIGNATURE_REQUEST_MESSAGES = {
     SignatureRequestStatus.PENDING: (
-        "Waiting for the target ESP32 to claim the request"
+        "Demande créée par l'utilisateur. "
+        "En attente d'authentification forte."
     ),
     SignatureRequestStatus.CLAIMED: (
-        "The target ESP32 claimed the request"
+        "Demande récupérée par le terminal."
     ),
     SignatureRequestStatus.AUTHENTICATING: (
-        "RFID and DY50 authentication is in progress"
+        "Authentification forte en cours."
     ),
     SignatureRequestStatus.AUTHENTICATED: (
-        "RFID and DY50 authentication succeeded"
+        "Identité vérifiée. Signature cryptographique en cours."
     ),
     SignatureRequestStatus.SIGNED: (
-        "Document signature completed"
+        "Signature réussie."
     ),
     SignatureRequestStatus.FAILED: (
-        "The signature request failed"
+        "Signature refusée."
     ),
     SignatureRequestStatus.EXPIRED: (
-        "The signature request expired"
+        "Demande expirée."
     ),
 }
+
+
+def _signature_request_content(
+    signature_request,
+    database: Session,
+) -> dict:
+    content = {
+        "request_id": str(signature_request.id),
+        "document_id": str(signature_request.document_id),
+        "state": signature_request.status.value,
+        "message": SIGNATURE_REQUEST_MESSAGES[
+            signature_request.status
+        ],
+    }
+
+    if signature_request.signature_id is not None:
+        content["signature_id"] = str(
+            signature_request.signature_id
+        )
+        signature = database.get(
+            DocumentSignature,
+            signature_request.signature_id,
+        )
+
+        if signature is not None:
+            content["algorithm"] = signature.algorithm
+
+            if signature.created_at is not None:
+                content["signed_at"] = (
+                    signature.created_at.isoformat()
+                )
+
+    return content
 
 
 def _page_response(filename: str) -> FileResponse:
@@ -253,14 +272,36 @@ def logout(
 )
 def upload_document_from_web(
     file: UploadFile = File(...),
+    user_id: uuid.UUID = Form(...),
     _session: UiSession = Depends(
         require_ui_csrf
     ),
     database: Session = Depends(get_db),
 ) -> JSONResponse:
+    user = database.get(User, user_id)
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if user.status != UserStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot assign a document to an inactive user",
+        )
+
     result = store_document(
         file=file,
         database=database,
+        user_id=user.id,
+    )
+    result["user_id"] = str(user.id)
+    result["message"] = (
+        "Document attribué à l'utilisateur. "
+        "En attente d'une demande de signature depuis "
+        "l'espace utilisateur."
     )
 
     return _json_response(
@@ -269,21 +310,45 @@ def upload_document_from_web(
     )
 
 
-@router.post(
-    "/api/signature-requests",
-    status_code=status.HTTP_202_ACCEPTED,
-)
-def request_signature_from_web(
-    payload: SignatureRequestCreate,
-    session: UiSession = Depends(
-        require_ui_csrf
+@router.get("/api/users")
+def active_users_for_document_assignment(
+    _session: UiSession = Depends(
+        require_ui_session
     ),
     database: Session = Depends(get_db),
 ) -> JSONResponse:
-    document = database.get(
-        Document,
-        payload.document_id,
+    users = database.scalars(
+        select(User)
+        .where(User.status == UserStatus.ACTIVE)
+        .order_by(User.full_name.asc(), User.username.asc())
+    ).all()
+
+    return _json_response(
+        {
+            "users": [
+                {
+                    "user_id": str(user.id),
+                    "username": user.username,
+                    "full_name": user.full_name,
+                    "email": user.email,
+                }
+                for user in users
+            ]
+        }
     )
+
+
+@router.get(
+    "/api/documents/{document_id}",
+)
+def document_details_for_admin(
+    document_id: uuid.UUID,
+    _session: UiSession = Depends(
+        require_ui_session
+    ),
+    database: Session = Depends(get_db),
+) -> JSONResponse:
+    document = database.get(Document, document_id)
 
     if document is None:
         raise HTTPException(
@@ -291,110 +356,56 @@ def request_signature_from_web(
             detail="Document not found",
         )
 
-    supplied_hash = payload.document_hash.lower()
-
-    if not hmac.compare_digest(
-        supplied_hash,
-        document.document_hash,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Document hash mismatch",
-        )
-
-    target_device_uid = (
-        settings.signature_device_uid.strip().upper()
-    )
-    device = database.scalar(
-        select(Device)
-        .where(Device.device_uid == target_device_uid)
-        .limit(1)
-    )
-
-    if device is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Configured signature device is unavailable",
-        )
-
-    if (
-        device.status != DeviceStatus.ACTIVE
-        or device.device_secret is None
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Configured signature device is unavailable",
-        )
-
-    signature_request = create_signature_request(
-        database,
-        owner_session_id=session.id,
-        device=device,
-        document=document,
-    )
-    database.flush()
-
-    add_audit_event(
-        database,
-        event_type="SIGNATURE_REQUEST_CREATED",
-        outcome="SUCCESS",
-        device_id=device.id,
-        document_id=document.id,
-        detail="Signature request queued for target device",
-    )
-
-    response_content = {
-        "request_id": str(signature_request.id),
-        "document_id": str(document.id),
-        "state": signature_request.status.value,
-        "message": SIGNATURE_REQUEST_MESSAGES[
-            signature_request.status
-        ],
-    }
-    database.commit()
-
     return _json_response(
-        response_content,
-        status_code=status.HTTP_202_ACCEPTED,
+        {
+            "document_id": str(document.id),
+            "filename": document.original_filename,
+            "size_bytes": document.size_bytes,
+            "document_hash": document.document_hash,
+            "user_id": (
+                str(document.user_id)
+                if document.user_id is not None
+                else None
+            ),
+            "algorithm": "SHA-256",
+        }
     )
 
 
 @router.get(
-    "/api/signature-requests/{request_id}",
+    "/api/documents/{document_id}/signature-request",
 )
-def signature_request_status(
-    request_id: uuid.UUID,
-    session: UiSession = Depends(
+def document_signature_request_status(
+    document_id: uuid.UUID,
+    _session: UiSession = Depends(
         require_ui_session
     ),
     database: Session = Depends(get_db),
-) -> JSONResponse:
-    signature_request = get_owned_signature_request(
-        database,
-        request_id=request_id,
-        owner_session_id=session.id,
+) -> Response:
+    document = database.get(Document, document_id)
+
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    signature_request = (
+        get_latest_signature_request_for_document(
+            database,
+            document_id=document.id,
+        )
     )
 
     if signature_request is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Signature request not found",
+        return Response(
+            status_code=status.HTTP_204_NO_CONTENT,
+            headers=NO_STORE_HEADERS,
         )
 
-    response_content = {
-        "request_id": str(signature_request.id),
-        "document_id": str(signature_request.document_id),
-        "state": signature_request.status.value,
-        "message": SIGNATURE_REQUEST_MESSAGES[
-            signature_request.status
-        ],
-    }
-
-    if signature_request.signature_id is not None:
-        response_content["signature_id"] = str(
-            signature_request.signature_id
-        )
-
-    database.commit()
+    response_content = _signature_request_content(
+        signature_request,
+        database,
+    )
 
     return _json_response(response_content)
