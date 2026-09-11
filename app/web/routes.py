@@ -137,10 +137,44 @@ def _signature_request_content(
 
         if signature is not None:
             content["algorithm"] = signature.algorithm
+            signer = database.get(User, signature.user_id)
 
-            if signature.created_at is not None:
+            if signer is not None:
+                content["signer_name"] = signer.full_name
+            signing_time = getattr(
+                signature,
+                "signing_time",
+                None,
+            )
+
+            if signing_time is not None:
+                content["signed_at"] = (
+                    signing_time.isoformat()
+                )
+            elif signature.created_at is not None:
                 content["signed_at"] = (
                     signature.created_at.isoformat()
+                )
+
+            for field in (
+                "pades_profile",
+                "certificate_subject",
+                "tsa_certificate_subject",
+            ):
+                value = getattr(signature, field, None)
+
+                if value:
+                    content[field] = value
+
+            timestamp_time = getattr(
+                signature,
+                "timestamp_time",
+                None,
+            )
+
+            if timestamp_time is not None:
+                content["timestamp_time"] = (
+                    timestamp_time.isoformat()
                 )
 
     return content

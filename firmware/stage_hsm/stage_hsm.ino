@@ -4,6 +4,8 @@
 
 #include <ArduinoJson.h>
 
+#include "secrets.h"
+
 #ifndef STAGE_HSM_AUTH_HARDWARE_AVAILABLE
   #ifdef __has_include
     #if __has_include(<SPI.h>) \
@@ -35,11 +37,7 @@
 // WIFI
 // ======================================================
 
-const char* WIFI_SSID =
-  "CHANGE_ME";
 
-const char* WIFI_PASSWORD =
-  "CHANGE_ME";
 
 
 // ======================================================
@@ -50,8 +48,6 @@ const char* DEVICE_UID =
   "ESP32-001";
 
 // Secret HMAC : 64 caractères HEX
-const char* DEVICE_SECRET =
-  "CHANGE_ME";
 
 
 // ======================================================

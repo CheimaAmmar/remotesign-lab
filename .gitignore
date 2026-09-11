@@ -31,3 +31,6 @@ certs/
 
 # Uploaded/runtime documents
 storage/
+
+# Local Arduino firmware secrets
+/firmware/stage_hsm/secrets.h

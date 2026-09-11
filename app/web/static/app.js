@@ -517,6 +517,26 @@ function displayRequestMetadata(payload) {
     details.push(`Algorithme : ${payload.algorithm}`);
   }
 
+  if (typeof payload.pades_profile === "string") {
+    details.push(`Profil : ${payload.pades_profile}`);
+  }
+
+  if (typeof payload.signer_name === "string") {
+    details.push(`Signataire : ${payload.signer_name}`);
+  }
+
+  if (typeof payload.certificate_subject === "string") {
+    details.push(`Certificat : ${payload.certificate_subject}`);
+  }
+
+  if (typeof payload.timestamp_time === "string") {
+    details.push(`Horodatage : ${formatDateTime(payload.timestamp_time)}`);
+  }
+
+  if (typeof payload.tsa_certificate_subject === "string") {
+    details.push(`TSA : ${payload.tsa_certificate_subject}`);
+  }
+
   elements.requestReference.textContent = details.join("\n");
   elements.requestReference.hidden = false;
 }

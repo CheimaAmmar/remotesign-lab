@@ -170,11 +170,28 @@ class ScalarRows:
 
 
 class OwnedDocumentsDatabase:
-    def __init__(self, documents, requests=(), signatures=()) -> None:
+    def __init__(
+        self,
+        documents,
+        requests=(),
+        signatures=(),
+        user=None,
+    ) -> None:
         self.documents = documents
         self.requests = requests
         self.signatures = signatures
+        self.user = user
         self.statements = []
+
+    def get(self, model, record_id):
+        if (
+            model is User
+            and self.user is not None
+            and record_id == self.user.id
+        ):
+            return self.user
+
+        return None
 
     def scalars(self, statement):
         self.statements.append(statement)
@@ -593,11 +610,23 @@ class UserDocumentIsolationTests(unittest.TestCase):
         signature = SimpleNamespace(
             id=signature_id,
             algorithm="RSA-PKCS1-SHA256",
+            signed_document_path="signed.pdf",
+            signing_time=signed_at,
+            pades_profile="PAdES-B-T",
+            certificate_subject="CN=Stage-HSM Development Signer",
+            timestamp_time=signed_at,
+            tsa_certificate_subject=(
+                "CN=Stage-HSM Development TSA"
+            ),
         )
         database = OwnedDocumentsDatabase(
             [document],
             [signature_request],
             [signature],
+            user=SimpleNamespace(
+                id=user_id,
+                full_name="Alice Martin",
+            ),
         )
         session = UserSession(
             id="session-a",
@@ -615,6 +644,13 @@ class UserDocumentIsolationTests(unittest.TestCase):
         self.assertEqual(payload["signed_at"], signed_at.isoformat())
         self.assertEqual(payload["signature_id"], str(signature_id))
         self.assertEqual(payload["algorithm"], "RSA-PKCS1-SHA256")
+        self.assertEqual(payload["signer_name"], "Alice Martin")
+        self.assertEqual(payload["pades_profile"], "PAdES-B-T")
+        self.assertEqual(payload["timestamp_time"], signed_at.isoformat())
+        self.assertEqual(
+            payload["tsa_certificate_subject"],
+            "CN=Stage-HSM Development TSA",
+        )
 
     def test_document_view_is_scoped_and_recorded_server_side(self) -> None:
         user_a = uuid.uuid4()

@@ -56,6 +56,7 @@ from app.security.user_session import (
 )
 from app.services.audit_service import add_audit_event
 from app.services.document_service import DOCUMENT_STORAGE
+from app.services.pades_service import SIGNED_DOCUMENT_STORAGE
 from app.services.signature_request_service import (
     create_signature_request,
     get_user_signature_request,
@@ -232,6 +233,7 @@ def _request_response(
     *,
     document: Document | None = None,
     signature: DocumentSignature | None = None,
+    signer_name: str | None = None,
 ) -> dict:
     response = {
         "request_id": str(signature_request.id),
@@ -252,14 +254,54 @@ def _request_response(
             None,
         )
 
-        if completed_at is not None:
-            response["signed_at"] = completed_at.isoformat()
-
         if document is not None:
             response["filename"] = document.original_filename
 
         if signature is not None:
             response["algorithm"] = signature.algorithm
+            signing_time = getattr(
+                signature,
+                "signing_time",
+                None,
+            )
+            response["signed_document_available"] = bool(
+                getattr(
+                    signature,
+                    "signed_document_path",
+                    None,
+                )
+            )
+
+            if signing_time is not None:
+                response["signed_at"] = signing_time.isoformat()
+            elif completed_at is not None:
+                response["signed_at"] = completed_at.isoformat()
+
+            for field in (
+                "pades_profile",
+                "certificate_subject",
+                "tsa_certificate_subject",
+            ):
+                value = getattr(signature, field, None)
+
+                if value:
+                    response[field] = value
+
+            if signer_name:
+                response["signer_name"] = signer_name
+
+            timestamp_time = getattr(
+                signature,
+                "timestamp_time",
+                None,
+            )
+
+            if timestamp_time is not None:
+                response["timestamp_time"] = (
+                    timestamp_time.isoformat()
+                )
+        elif completed_at is not None:
+            response["signed_at"] = completed_at.isoformat()
 
     return response
 
@@ -447,6 +489,11 @@ def list_user_documents(
         if signature_request.signature_id is not None
     ]
     signatures_by_id: dict[uuid.UUID, DocumentSignature] = {}
+    current_user = (
+        database.get(User, session.user_id)
+        if signature_ids
+        else None
+    )
 
     if signature_ids:
         signatures = database.scalars(
@@ -475,6 +522,11 @@ def list_user_documents(
                                 latest_by_document[
                                     document.id
                                 ].signature_id
+                            ),
+                            signer_name=(
+                                current_user.full_name
+                                if current_user is not None
+                                else None
                             ),
                         )
                         if document.id in latest_by_document
@@ -527,6 +579,69 @@ def view_user_document(
         media_type="application/pdf",
         filename=document.original_filename,
         content_disposition_type="inline",
+        headers=NO_STORE_HEADERS,
+    )
+
+
+@router.get("/documents/{document_id}/signed")
+def download_user_signed_document(
+    document_id: uuid.UUID,
+    session: UserSession = Depends(require_user_session),
+    database: Session = Depends(get_db),
+) -> FileResponse:
+    document = database.scalar(
+        select(Document).where(
+            Document.id == document_id,
+            Document.user_id == session.user_id,
+        )
+    )
+
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Signed document not found",
+        )
+
+    signature = database.scalar(
+        select(DocumentSignature)
+        .where(
+            DocumentSignature.document_id == document.id,
+            DocumentSignature.user_id == session.user_id,
+            DocumentSignature.signed_document_path.is_not(None),
+        )
+        .order_by(
+            DocumentSignature.created_at.desc(),
+            DocumentSignature.id.desc(),
+        )
+        .limit(1)
+    )
+
+    if signature is None or not signature.signed_document_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Signed document not found",
+        )
+
+    storage_root = SIGNED_DOCUMENT_STORAGE.resolve()
+    signed_document_path = (
+        SIGNED_DOCUMENT_STORAGE
+        / signature.signed_document_path
+    ).resolve()
+
+    if (
+        not signed_document_path.is_relative_to(storage_root)
+        or not signed_document_path.is_file()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Signed document file not found",
+        )
+
+    return FileResponse(
+        signed_document_path,
+        media_type="application/pdf",
+        filename=f"signed-{document.id}.pdf",
+        content_disposition_type="attachment",
         headers=NO_STORE_HEADERS,
     )
 
@@ -660,11 +775,21 @@ def user_signature_request_status(
         if signature_request.signature_id is not None
         else None
     )
+    current_user = (
+        database.get(User, session.user_id)
+        if signature is not None
+        else None
+    )
     response = _json_response(
         _request_response(
             signature_request,
             document=document,
             signature=signature,
+            signer_name=(
+                current_user.full_name
+                if current_user is not None
+                else None
+            ),
         )
     )
     database.commit()

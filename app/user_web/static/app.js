@@ -170,9 +170,14 @@ function renderDocuments(documents) {
       const signatureMeta = document.createElement("p");
       signatureMeta.className = "user-signature-meta";
       const metadata = [];
-      if (item.request.signed_at) metadata.push(formatDate(item.request.signed_at));
+      if (item.request.signer_name) metadata.push(`Signataire : ${item.request.signer_name}`);
+      if (item.request.signed_at) metadata.push(`Date de signature : ${formatDate(item.request.signed_at)}`);
       if (item.request.signature_id) metadata.push(`Signature : ${item.request.signature_id}`);
       if (item.request.algorithm) metadata.push(String(item.request.algorithm));
+      if (item.request.pades_profile) metadata.push(`Profil : ${item.request.pades_profile}`);
+      if (item.request.certificate_subject) metadata.push(`Certificat : ${item.request.certificate_subject}`);
+      if (item.request.timestamp_time) metadata.push(`Horodatage : ${formatDate(item.request.timestamp_time)}`);
+      if (item.request.tsa_certificate_subject) metadata.push(`TSA : ${item.request.tsa_certificate_subject}`);
       signatureMeta.textContent = metadata.join(" · ");
       if (metadata.length) details.append(signatureMeta);
     }
@@ -193,6 +198,14 @@ function renderDocuments(documents) {
       signedBadge.className = "user-state user-state-signed";
       signedBadge.textContent = "Signé";
       actions.append(signedBadge);
+
+      if (item.request.signed_document_available === true) {
+        const download = document.createElement("a");
+        download.className = "button button-primary";
+        download.textContent = "Télécharger le PDF signé";
+        download.href = `/user/documents/${encodeURIComponent(item.document_id)}/signed`;
+        actions.append(download);
+      }
     } else if (!(item.request && ACTIVE_STATES.has(item.request.state))) {
       const sign = document.createElement("button");
       sign.className = "button button-accent";
@@ -299,9 +312,14 @@ function displayRequestState(payload) {
 
   if (payload.state === "SIGNED") {
     if (payload.filename) metadata.push(String(payload.filename));
-    if (payload.signed_at) metadata.push(formatDate(payload.signed_at));
+    if (payload.signer_name) metadata.push(`Signataire : ${payload.signer_name}`);
+    if (payload.signed_at) metadata.push(`Date de signature : ${formatDate(payload.signed_at)}`);
     if (payload.signature_id) metadata.push(`Signature : ${payload.signature_id}`);
     if (payload.algorithm) metadata.push(String(payload.algorithm));
+    if (payload.pades_profile) metadata.push(`Profil : ${payload.pades_profile}`);
+    if (payload.certificate_subject) metadata.push(`Certificat : ${payload.certificate_subject}`);
+    if (payload.timestamp_time) metadata.push(`Horodatage : ${formatDate(payload.timestamp_time)}`);
+    if (payload.tsa_certificate_subject) metadata.push(`TSA : ${payload.tsa_certificate_subject}`);
   }
 
   elements.requestMessage.textContent = metadata.length

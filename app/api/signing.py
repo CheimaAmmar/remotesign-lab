@@ -1,4 +1,6 @@
 import hashlib
+import os
+import tempfile
 import uuid
 
 from datetime import (
@@ -30,6 +32,7 @@ from app.models import (
     Document,
     DocumentSignature,
     SignatureRequestStatus,
+    User,
 )
 
 from app.security.device_auth import (
@@ -43,6 +46,11 @@ from app.security.nonce_store import (
 from app.services.hsm_service import (
     HSMService,
     HSMServiceError,
+)
+from app.services.pades_service import (
+    PAdESService,
+    PAdESServiceError,
+    SIGNED_DOCUMENT_STORAGE,
 )
 
 from app.services.audit_service import (
@@ -646,6 +654,25 @@ def sign_document(
             session_id=auth_session.id,
         )
 
+    signing_user = database.get(
+        User,
+        auth_session.user_id,
+    )
+
+    if signing_user is None:
+        reject_sign(
+            database,
+            status_code=status.HTTP_403_FORBIDDEN,
+            response_detail="Signature user not found",
+            audit_detail="Authenticated signature user not found",
+            terminal_queue_failure=True,
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+        )
+
     # ==================================================
     # HASH POSTGRESQL
     # ==================================================
@@ -867,10 +894,107 @@ def sign_document(
         )
 
     # ==================================================
+    # PDF PADES TEMPORAIRE + PUBLICATION ATOMIQUE
+    # ==================================================
+
+    signature_id = uuid.uuid4()
+    signed_filename = (
+        f"{document.id}-{signature_id}.pdf"
+    )
+    signed_storage_root = (
+        SIGNED_DOCUMENT_STORAGE.resolve()
+    )
+    final_signed_path = (
+        signed_storage_root / signed_filename
+    ).resolve()
+
+    if not final_signed_path.is_relative_to(
+        signed_storage_root
+    ):
+        reject_sign(
+            database,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            response_detail="Invalid signed document path",
+            audit_detail="Invalid signed document path",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+        )
+
+    try:
+        signed_storage_root.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        temporary_file = tempfile.NamedTemporaryFile(
+            mode="wb",
+            prefix=f".{signature_id}-",
+            suffix=".pdf.tmp",
+            dir=signed_storage_root,
+            delete=False,
+        )
+        temporary_signed_path = Path(temporary_file.name)
+        temporary_file.close()
+    except OSError:
+        reject_sign(
+            database,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            response_detail="PAdES signing failed",
+            audit_detail="Unable to prepare signed PDF storage",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+        )
+
+    try:
+        pades_result = PAdESService().sign_pdf(
+            source_pdf_path=document_path,
+            output_pdf_path=temporary_signed_path,
+            signature_id=signature_id,
+            signer_name=signing_user.full_name,
+        )
+        os.replace(
+            temporary_signed_path,
+            final_signed_path,
+        )
+    except (OSError, PAdESServiceError):
+        temporary_signed_path.unlink(missing_ok=True)
+        final_signed_path.unlink(missing_ok=True)
+        reject_sign(
+            database,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            response_detail="PAdES signing failed",
+            audit_detail="PAdES generation or validation failed",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+        )
+
+    if not final_signed_path.is_file():
+        reject_sign(
+            database,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            response_detail="PAdES signing failed",
+            audit_detail="Signed PAdES document was not published",
+            source_ip=source_ip,
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+        )
+
+    # ==================================================
     # ENREGISTREMENT SIGNATURE
     # ==================================================
 
     signature_record = DocumentSignature(
+        id=signature_id,
         session_id=auth_session.id,
         document_id=document.id,
         user_id=auth_session.user_id,
@@ -879,58 +1003,84 @@ def sign_document(
         algorithm=signature_result.algorithm,
         key_label=signature_result.key_label,
         signature_base64=signature_result.signature_base64,
+        signed_document_path=signed_filename,
+        pades_profile=pades_result.pades_profile,
+        certificate_fingerprint_sha256=(
+            pades_result.certificate_fingerprint_sha256
+        ),
+        certificate_subject=pades_result.certificate_subject,
+        signing_time=pades_result.signing_time,
+        timestamp_time=pades_result.timestamp_time,
+        tsa_certificate_subject=(
+            pades_result.tsa_certificate_subject
+        ),
+        tsa_certificate_fingerprint_sha256=(
+            pades_result.tsa_certificate_fingerprint_sha256
+        ),
     )
 
-    database.add(
-        signature_record
-    )
+    try:
+        database.add(
+            signature_record
+        )
 
-    database.flush()
+        database.flush()
 
-    try_mark_signature_request_signed(
-        database,
-        authentication_session_id=auth_session.id,
-        signature=signature_record,
-    )
+        try_mark_signature_request_signed(
+            database,
+            authentication_session_id=auth_session.id,
+            signature=signature_record,
+        )
 
-    # ==================================================
-    # CONSOMMATION SESSION
-    # ==================================================
+        # ==============================================
+        # CONSOMMATION SESSION
+        # ==============================================
 
-    signed_at = datetime.now(
-        timezone.utc
-    )
+        signed_at = datetime.now(
+            timezone.utc
+        )
 
-    auth_session.used_at = (
-        signed_at
-    )
+        auth_session.used_at = (
+            signed_at
+        )
 
-    device.last_seen = (
-        signed_at
-    )
+        device.last_seen = (
+            signed_at
+        )
 
-    # ==================================================
-    # AUDIT SUCCESS
-    # ==================================================
+        # ==============================================
+        # AUDIT SUCCESS
+        # ==============================================
 
-    add_audit_event(
-        database,
-        event_type="DOCUMENT_SIGNED",
-        outcome="SUCCESS",
-        user_id=auth_session.user_id,
-        device_id=device.id,
-        session_id=auth_session.id,
-        document_id=document.id,
-        signature_id=signature_record.id,
-        source_ip=source_ip,
-        detail="Document signed using SoftHSM",
-    )
+        add_audit_event(
+            database,
+            event_type="DOCUMENT_SIGNED",
+            outcome="SUCCESS",
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+            signature_id=signature_record.id,
+            source_ip=source_ip,
+            detail=(
+                "Document signed using SoftHSM as "
+                f"{pades_result.pades_profile}"
+            ),
+        )
+    except Exception:
+        database.rollback()
+        final_signed_path.unlink(missing_ok=True)
+        raise
 
-    # ==================================================
-    # COMMIT ATOMIQUE
-    # ==================================================
-
-    database.commit()
+    # Le fichier final existe avant le commit. En cas d'issue de commit
+    # ambiguë (p. ex. perte de connexion après validation PostgreSQL), il
+    # est volontairement conservé pour qu'une ligne éventuellement validée
+    # ne pointe jamais vers un fichier supprimé.
+    try:
+        database.commit()
+    except Exception:
+        database.rollback()
+        raise
 
     database.refresh(
         signature_record
@@ -967,6 +1117,21 @@ def sign_document(
 
         "key_label":
             signature_result.key_label,
+
+        "pades_profile":
+            pades_result.pades_profile,
+
+        "certificate_subject":
+            pades_result.certificate_subject,
+
+        "timestamp_time": (
+            pades_result.timestamp_time.isoformat()
+            if pades_result.timestamp_time is not None
+            else None
+        ),
+
+        "tsa_subject":
+            pades_result.tsa_certificate_subject,
 
         "signature_base64":
             signature_result.signature_base64,

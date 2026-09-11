@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,6 +19,18 @@ class Settings(BaseSettings):
     softhsm_key_label: str = "REMOTE-SIGNING-KEY"
     softhsm_key_id: str = "01"
     softhsm_user_pin: SecretStr
+
+    pades_signing_certificate: Path = Path(
+        "certs/stage-hsm-signing.crt"
+    )
+    pades_certificate_chain: Path | None = Path(
+        "certs/stage-hsm-test-ca.crt"
+    )
+    pades_profile: str = "PAdES-B-B"
+
+    tsa_url: str | None = None
+    tsa_ca_certificate: Path | None = None
+    tsa_timeout_seconds: float = 5.0
 
     model_config = SettingsConfigDict(
         env_file=".env",

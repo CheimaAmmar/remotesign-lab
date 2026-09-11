@@ -511,6 +511,48 @@ class DocumentSignature(Base):
             "session_id",
             name="uq_document_signature_session",
         ),
+        UniqueConstraint(
+            "signed_document_path",
+            name=(
+                "uq_document_signatures_signed_document_path"
+            ),
+        ),
+        CheckConstraint(
+            "certificate_fingerprint_sha256 IS NULL OR "
+            "char_length(certificate_fingerprint_sha256) = 64",
+            name=(
+                "ck_document_signature_certificate_fingerprint_length"
+            ),
+        ),
+        CheckConstraint(
+            "(signed_document_path IS NULL AND "
+            "pades_profile IS NULL AND "
+            "certificate_fingerprint_sha256 IS NULL AND "
+            "certificate_subject IS NULL AND signing_time IS NULL) "
+            "OR (signed_document_path IS NOT NULL AND "
+            "pades_profile IS NOT NULL AND "
+            "certificate_fingerprint_sha256 IS NOT NULL AND "
+            "certificate_subject IS NOT NULL AND signing_time IS NOT NULL)",
+            name="ck_document_signature_pades_metadata_complete",
+        ),
+        CheckConstraint(
+            "tsa_certificate_fingerprint_sha256 IS NULL OR "
+            "char_length(tsa_certificate_fingerprint_sha256) = 64",
+            name=(
+                "ck_document_signature_tsa_certificate_"
+                "fingerprint_length"
+            ),
+        ),
+        CheckConstraint(
+            "(timestamp_time IS NULL AND "
+            "tsa_certificate_subject IS NULL AND "
+            "tsa_certificate_fingerprint_sha256 IS NULL) OR "
+            "(timestamp_time IS NOT NULL AND "
+            "tsa_certificate_subject IS NOT NULL AND "
+            "tsa_certificate_fingerprint_sha256 IS NOT NULL AND "
+            "pades_profile = 'PAdES-B-T')",
+            name="ck_document_signature_tsa_metadata_complete",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -577,6 +619,50 @@ class DocumentSignature(Base):
     signature_base64: Mapped[str] = mapped_column(
         Text,
         nullable=False,
+    )
+
+    signed_document_path: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    pades_profile: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+    )
+
+    certificate_fingerprint_sha256: Mapped[
+        str | None
+    ] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    certificate_subject: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+    )
+
+    signing_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    timestamp_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    tsa_certificate_subject: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+    )
+
+    tsa_certificate_fingerprint_sha256: Mapped[
+        str | None
+    ] = mapped_column(
+        String(64),
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(

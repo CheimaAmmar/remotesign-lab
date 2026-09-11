@@ -23,6 +23,7 @@ from app.models import (
     Document,
     DocumentSignature,
     SignatureRequestStatus,
+    User,
     UserStatus,
 )
 from app.security import ui_session as ui_session_store
@@ -137,6 +138,16 @@ class FakeAdminReadDatabase:
             and record_id == self.signature.id
         ):
             return self.signature
+
+        if (
+            model is User
+            and self.signature is not None
+            and record_id == getattr(self.signature, "user_id", None)
+        ):
+            return SimpleNamespace(
+                id=record_id,
+                full_name="Alice Martin",
+            )
 
         return None
 
@@ -570,8 +581,16 @@ class SignatureRequestTests(unittest.TestCase):
         document = SimpleNamespace(id=document_id)
         signature = SimpleNamespace(
             id=signature_id,
+            user_id=uuid.uuid4(),
             algorithm="RSA-PKCS1-SHA256",
             created_at=signed_at,
+            signing_time=signed_at,
+            pades_profile="PAdES-B-T",
+            certificate_subject="CN=Stage-HSM Development Signer",
+            timestamp_time=signed_at,
+            tsa_certificate_subject=(
+                "CN=Stage-HSM Development TSA"
+            ),
         )
 
         for queue_state in SignatureRequestStatus:
@@ -620,6 +639,26 @@ class SignatureRequestTests(unittest.TestCase):
                 self.assertEqual(
                     payload["signed_at"],
                     signed_at.isoformat(),
+                )
+                self.assertEqual(
+                    payload["pades_profile"],
+                    "PAdES-B-T",
+                )
+                self.assertEqual(
+                    payload["certificate_subject"],
+                    "CN=Stage-HSM Development Signer",
+                )
+                self.assertEqual(
+                    payload["signer_name"],
+                    "Alice Martin",
+                )
+                self.assertEqual(
+                    payload["timestamp_time"],
+                    signed_at.isoformat(),
+                )
+                self.assertEqual(
+                    payload["tsa_certificate_subject"],
+                    "CN=Stage-HSM Development TSA",
                 )
             else:
                 self.assertNotIn("signature_id", payload)
