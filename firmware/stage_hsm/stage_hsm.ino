@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 
 #include "secrets.h"
+#include "trust_anchor.h"
 
 #ifndef STAGE_HSM_AUTH_HARDWARE_AVAILABLE
   #ifdef __has_include
@@ -123,45 +124,6 @@ HardwareSerial fingerprintSerial(1);
 Adafruit_Fingerprint finger(&fingerprintSerial);
 
 #endif
-
-
-// ======================================================
-// ROOT CA
-// ======================================================
-
-const char* ROOT_CA = R"EOF(
------BEGIN CERTIFICATE-----
-MIIFUTCCAzmgAwIBAgIUVAGjElYtT4t6lcvKcfiSfZKBmVQwDQYJKoZIhvcNAQEL
-BQAwODELMAkGA1UEBhMCVE4xEjAQBgNVBAoMCVN0YWdlLUhTTTEVMBMGA1UEAwwM
-U3RhZ2UtSFNNLUNBMB4XDTI2MDgyNjEzNDg0N1oXDTM2MDgyMzEzNDg0N1owODEL
-MAkGA1UEBhMCVE4xEjAQBgNVBAoMCVN0YWdlLUhTTTEVMBMGA1UEAwwMU3RhZ2Ut
-SFNNLUNBMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAmMcpzNl1hsNr
-DHJK0+BQhD/A05eTqe8qx7CdvSpS1D49zy8JWP5j4DSsJ7waRuIKI+igeY7A89iQ
-z7hPsbdw1n/97y6LTsv0gINeqhaZ5+aA6Q7Q/iMDB1a+mrSNIB6PEUm6B5y0B2+9
-SPBeIdxzT4dZ76FU0z1UBqefWr9+k1fXCCtWYi3LfXXddQw1AbsWAoQKQs30W0pP
-TnggH8G9iGp+kEQpT/x9HYWuUKxQ08itM3hp5zf/sFYd+xsrNmPrroDTAvetuzct
-N9gO23dqqd0D/8vq7oXsr3LakQgIE4Omc1hQWEUDuJJGShkfJ55tm8Cbp8nYweJy
-SRVJNWPsomHtp1u+EucrIC9D+zV8Y9hEqqGOV9DKo7eRPiB1cmoSYGdJdcIxDqhR
-yU5sCR98erZ+i7XaLuVfgXt8b9me/Cr83YZIXodxcdRW4AgMPGPISM8AJX1sDNZO
-h/XyWRZipcjiobyzFpAZ0n+vG4v2NkmXkQXGT07l+O7scPE8Qj/a+AQZadgITXY1
-TR6zylTLxBwU0Oh7iVu7X29tizfjHAKSQRhMDj0+C1PBkONzQptky3D4hdv0sykS
-SmV4xFDKrsonSzM6N1rMlQv0GjkgIxiGo6XUP3Ud3neA/R6FuWCX1tfIWxqOq4N5
-iWSKZd0UCXkN/+yl6OghOe1QTWj+OZcCAwEAAaNTMFEwHQYDVR0OBBYEFHbjUUVz
-2DGjpacRVyhBi7jutSV2MB8GA1UdIwQYMBaAFHbjUUVz2DGjpacRVyhBi7jutSV2
-MA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggIBADsArC54hsN451Nx
-MA2O+MGuWrObGnrOa+r06cCjC1efXF5VsDszv9YOIKN+Y6ajVb/YNEvxOluUZDy5
-H82CJuQ+YDXs/J6rlaY6VPXO/6UBj4t8I0HmRQ9bRMSrqvpIiMoOx8lLeU/ku/1N
-D07vzutqaLL7G6Lw3aK+0E6IIi8VuaOU9rNm4QjBKY3o4LFxAVQYROUZwlrtgVZk
-QzKOH+mLng8J8PwEl3RlB9+mFlTNcPyfI3yb6lEq7lqJVQpezgff6xy53trBR3uv
-5M3nuR11OnEIlft2/oS+Y4HA5UZvuGWPM0PhvwgVUDiZf8GT0mz2Q4gbk94GtA2z
-7bcTM/Moe6b5gZzsDqugfUXsucTm34FtjWPJxit06YIq10Iy5hVwDMg74lANkdjp
-hVDARx0wYf6R+Ukwt0YMK55pI2JJhwmq5ylX4SUEwr6RPsOq/1vmBa7bsscVtK4j
-LldB+gse+u1zSSA6iImMJgsFI73kuaF0cIvCOKO8ZYNxeRMSN2XZTXboR1mQXfRW
-eJ23m37uhLwE1dm08zQoZ/lGW67797L9pAfwVf8aC+n81InZy8geniEWKD1YVq/P
-+WhnclhItGXCpRetBHT7GSPRMo8Qr+Dlg93xygTo2zSFzkC09F9+Ejhk6eylezLA
-LW8HtgPRxQgWRp2ctCc+66Dc6KW6
------END CERTIFICATE-----
-)EOF";
 
 
 // ======================================================
@@ -577,7 +539,7 @@ bool testServerConnection() {
   }
 
   WiFiClientSecure secureClient;
-  secureClient.setCACert(ROOT_CA);
+  secureClient.setCACert(SERVER_CA_CERT);
 
   HTTPClient http;
   const String url = String(SERVER_BASE) + "/docs";
@@ -838,7 +800,7 @@ FetchResult fetchNextSignatureRequest(
   }
 
   WiFiClientSecure secureClient;
-  secureClient.setCACert(ROOT_CA);
+  secureClient.setCACert(SERVER_CA_CERT);
 
   HTTPClient http;
   const String url =
@@ -951,7 +913,7 @@ StepResult requestChallenge(
   }
 
   WiFiClientSecure secureClient;
-  secureClient.setCACert(ROOT_CA);
+  secureClient.setCACert(SERVER_CA_CERT);
 
   HTTPClient http;
   const String url =
@@ -1082,7 +1044,7 @@ StepResult completeAuthentication(
   }
 
   WiFiClientSecure secureClient;
-  secureClient.setCACert(ROOT_CA);
+  secureClient.setCACert(SERVER_CA_CERT);
 
   HTTPClient http;
   const String url =
@@ -1183,7 +1145,7 @@ StepResult signDocument(
   }
 
   WiFiClientSecure secureClient;
-  secureClient.setCACert(ROOT_CA);
+  secureClient.setCACert(SERVER_CA_CERT);
 
   HTTPClient http;
   const String url = String(SERVER_BASE) + SIGN_PATH;
@@ -1318,7 +1280,7 @@ StepResult reportRequestFailure(
   serializeJson(payload, body);
 
   WiFiClientSecure secureClient;
-  secureClient.setCACert(ROOT_CA);
+  secureClient.setCACert(SERVER_CA_CERT);
 
   HTTPClient http;
   const String url = String(SERVER_BASE) + path;

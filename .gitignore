@@ -34,3 +34,4 @@ storage/
 
 # Local Arduino firmware secrets
 /firmware/stage_hsm/secrets.h
+/firmware/stage_hsm/trust_anchor.h
