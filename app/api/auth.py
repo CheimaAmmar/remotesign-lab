@@ -635,7 +635,7 @@ def create_challenge(
     # avant l'événement d'audit.
     database.flush()
 
-    try_attach_authentication_session(
+    signature_request = try_attach_authentication_session(
         database,
         device_id=device.id,
         document_id=document.id,
@@ -654,11 +654,19 @@ def create_challenge(
         database,
         event_type="AUTH_CHALLENGE_CREATED",
         outcome="SUCCESS",
+        actor_type="DEVICE",
+        actor_id=device.device_uid,
         user_id=user.id,
         device_id=device.id,
         session_id=auth_session.id,
         document_id=document.id,
-        source_ip=source_ip,
+        signature_request_id=(
+            signature_request.id
+            if signature_request is not None
+            else None
+        ),
+        request=request,
+        http_status=status.HTTP_200_OK,
         detail="Strong authentication challenge created",
     )
 
@@ -1333,7 +1341,7 @@ def complete_authentication(
 
     auth_session.verified_at = now
 
-    try_mark_signature_request_authenticated(
+    signature_request = try_mark_signature_request_authenticated(
         database,
         authentication_session_id=auth_session.id,
     )
@@ -1344,11 +1352,19 @@ def complete_authentication(
         database,
         event_type="STRONG_AUTH_COMPLETED",
         outcome="SUCCESS",
+        actor_type="DEVICE",
+        actor_id=device.device_uid,
         user_id=auth_session.user_id,
         device_id=device.id,
         session_id=auth_session.id,
         document_id=document.id,
-        source_ip=source_ip,
+        signature_request_id=(
+            signature_request.id
+            if signature_request is not None
+            else None
+        ),
+        request=request,
+        http_status=status.HTTP_200_OK,
         detail="RFID and fingerprint authentication successful",
     )
 

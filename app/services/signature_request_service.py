@@ -41,6 +41,7 @@ def _expire_if_needed(
     signature_request: SignatureRequest,
     *,
     now: datetime,
+    database: Session | None = None,
 ) -> bool:
     if (
         signature_request.status
@@ -55,6 +56,25 @@ def _expire_if_needed(
     )
     signature_request.completed_at = now
     signature_request.updated_at = now
+
+    if database is not None:
+        # Local import keeps the queue service independent at import time
+        # while ensuring expiration and its audit evidence share one
+        # transaction.
+        from app.services.audit_service import add_audit_event
+
+        add_audit_event(
+            database,
+            event_type="SIGNATURE_REQUEST_EXPIRED",
+            outcome="FAILURE",
+            actor_type="SYSTEM",
+            user_id=signature_request.user_id,
+            device_id=signature_request.device_id,
+            document_id=signature_request.document_id,
+            signature_request_id=signature_request.id,
+            failure_code="REQUEST_EXPIRED",
+            detail="Signature request expired",
+        )
 
     return True
 
@@ -123,6 +143,29 @@ def expire_signature_requests(
             SignatureRequest.device_id == device_id
         )
 
+    if isinstance(database, Session):
+        expired_requests = list(
+            database.scalars(
+                select(SignatureRequest)
+                .where(*conditions)
+                .order_by(
+                    SignatureRequest.created_at.asc(),
+                    SignatureRequest.id.asc(),
+                )
+                .with_for_update(skip_locked=True)
+            ).all()
+        )
+
+        for signature_request in expired_requests:
+            _expire_if_needed(
+                signature_request,
+                now=current_time,
+                database=database,
+            )
+
+        return len(expired_requests)
+
+    # Lightweight compatibility path for isolated unit-test doubles.
     result = database.execute(
         update(SignatureRequest)
         .where(*conditions)
@@ -238,6 +281,7 @@ def get_owned_signature_request(
     _expire_if_needed(
         signature_request,
         now=now,
+        database=database,
     )
 
     return signature_request
@@ -264,6 +308,7 @@ def get_user_signature_request(
     _expire_if_needed(
         signature_request,
         now=utc_now(),
+        database=database,
     )
 
     return signature_request
@@ -336,7 +381,11 @@ def attach_authentication_session(
     if signature_request is None:
         return None
 
-    if _expire_if_needed(signature_request, now=now):
+    if _expire_if_needed(
+        signature_request,
+        now=now,
+        database=database,
+    ):
         return signature_request
 
     signature_request.authentication_session_id = (
@@ -370,7 +419,11 @@ def mark_signature_request_authenticated(
 
     now = utc_now()
 
-    if _expire_if_needed(signature_request, now=now):
+    if _expire_if_needed(
+        signature_request,
+        now=now,
+        database=database,
+    ):
         return signature_request
 
     if (
@@ -416,7 +469,11 @@ def mark_signature_request_signed(
 
     now = utc_now()
 
-    if _expire_if_needed(signature_request, now=now):
+    if _expire_if_needed(
+        signature_request,
+        now=now,
+        database=database,
+    ):
         return signature_request
 
     if (
@@ -452,7 +509,11 @@ def mark_signature_request_failed(
 
     now = utc_now()
 
-    if _expire_if_needed(signature_request, now=now):
+    if _expire_if_needed(
+        signature_request,
+        now=now,
+        database=database,
+    ):
         return signature_request
 
     if signature_request.status in (
@@ -488,7 +549,11 @@ def mark_signature_request_failed_by_session(
 
     now = utc_now()
 
-    if _expire_if_needed(signature_request, now=now):
+    if _expire_if_needed(
+        signature_request,
+        now=now,
+        database=database,
+    ):
         return signature_request
 
     if signature_request.status in (
@@ -530,10 +595,12 @@ def persist_terminal_signature_request_failure(
 def _run_optional_queue_hook(
     database: Session,
     operation,
-) -> None:
+) -> object | None:
+    result = None
+
     try:
         with database.begin_nested():
-            operation()
+            result = operation()
 
     except SQLAlchemyError as error:
         original_error = getattr(error, "orig", None)
@@ -553,6 +620,8 @@ def _run_optional_queue_hook(
             "Signature queue schema is not migrated yet; "
             "skipping state synchronization"
         )
+
+    return result
 
 
 def signature_request_is_authorized_for_session(
@@ -606,8 +675,8 @@ def signature_request_is_authorized_for_session(
 def try_attach_authentication_session(
     database: Session,
     **kwargs,
-) -> None:
-    _run_optional_queue_hook(
+) -> SignatureRequest | None:
+    result = _run_optional_queue_hook(
         database,
         lambda: attach_authentication_session(
             database,
@@ -615,13 +684,15 @@ def try_attach_authentication_session(
         ),
     )
 
+    return result if isinstance(result, SignatureRequest) else None
+
 
 def try_mark_signature_request_authenticated(
     database: Session,
     *,
     authentication_session_id: uuid.UUID,
-) -> None:
-    _run_optional_queue_hook(
+) -> SignatureRequest | None:
+    result = _run_optional_queue_hook(
         database,
         lambda: mark_signature_request_authenticated(
             database,
@@ -631,14 +702,16 @@ def try_mark_signature_request_authenticated(
         ),
     )
 
+    return result if isinstance(result, SignatureRequest) else None
+
 
 def try_mark_signature_request_signed(
     database: Session,
     *,
     authentication_session_id: uuid.UUID,
     signature: DocumentSignature,
-) -> None:
-    _run_optional_queue_hook(
+) -> SignatureRequest | None:
+    result = _run_optional_queue_hook(
         database,
         lambda: mark_signature_request_signed(
             database,
@@ -648,3 +721,5 @@ def try_mark_signature_request_signed(
             signature=signature,
         ),
     )
+
+    return result if isinstance(result, SignatureRequest) else None

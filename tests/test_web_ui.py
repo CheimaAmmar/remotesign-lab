@@ -10,7 +10,7 @@ from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from dotenv import dotenv_values
 from fastapi import HTTPException, UploadFile, status
@@ -115,6 +115,9 @@ class FakeDocumentDatabase:
 
     def add(self, record) -> None:
         self.added = record
+
+    def flush(self) -> None:
+        pass
 
     def commit(self) -> None:
         self.commit_count += 1
@@ -537,7 +540,7 @@ class DocumentServiceTests(unittest.TestCase):
             result["document_hash"],
             hashlib.sha256(pdf).hexdigest(),
         )
-        self.assertEqual(database.commit_count, 1)
+        self.assertEqual(database.commit_count, 0)
         self.assertEqual(database.refresh_count, 1)
         self.assertIsNotNone(database.added)
 
@@ -726,6 +729,7 @@ class SignatureRequestTests(unittest.TestCase):
             get=lambda _model, record_id: (
                 user if record_id == user.id else None
             ),
+            commit=Mock(),
         )
         upload = UploadFile(
             file=BytesIO(b"%PDF-1.7\n%%EOF\n"),
@@ -742,11 +746,17 @@ class SignatureRequestTests(unittest.TestCase):
             "message": "Document uploaded and hashed successfully",
         }
 
-        with patch(
-            "app.web.routes.store_document",
-            return_value=stored.copy(),
-        ) as store:
+        with (
+            patch(
+                "app.web.routes.store_document",
+                return_value=stored.copy(),
+            ) as store,
+            patch(
+                "app.web.routes.add_audit_event",
+            ) as audit,
+        ):
             response = upload_document_from_web(
+                build_request(path="/ui/api/documents/upload"),
                 upload,
                 user.id,
                 SimpleNamespace(id="admin-session"),
@@ -766,6 +776,17 @@ class SignatureRequestTests(unittest.TestCase):
             database=database,
             user_id=user.id,
         )
+        self.assertEqual(
+            [
+                call.kwargs["event_type"]
+                for call in audit.call_args_list
+            ],
+            ["DOCUMENT_UPLOADED", "DOCUMENT_ASSIGNED"],
+        )
+        for call in audit.call_args_list:
+            self.assertNotIn("consented_at", call.kwargs)
+            self.assertNotIn("consent_version", call.kwargs)
+        database.commit.assert_called_once_with()
 
     def test_admin_document_can_be_restored_from_database(self) -> None:
         document = SimpleNamespace(

@@ -38,8 +38,9 @@ def is_rate_limited(
     )
 
     conditions = [
-        SecurityAuditEvent.outcome
-        == "FAILED",
+        SecurityAuditEvent.outcome.in_(
+            ("FAILED", "FAILURE", "DENIED")
+        ),
 
         SecurityAuditEvent.source_ip
         == source_ip,

@@ -24,6 +24,7 @@ from app.models import (
     DeviceStatus,
     Document,
     DocumentSignature,
+    SecurityAuditEvent,
     SignatureRequest,
     SignatureRequestStatus,
     User,
@@ -681,6 +682,9 @@ class UserDocumentIsolationTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as hidden:
             view_user_document(
                 document.id,
+                build_request(
+                    path=f"/user/documents/{document.id}/view"
+                ),
                 UserSession(
                     id="session-b",
                     user_id=user_b,
@@ -695,18 +699,31 @@ class UserDocumentIsolationTests(unittest.TestCase):
             path = Path(directory) / document.stored_filename
             path.write_bytes(b"%PDF-1.4\n%%EOF\n")
 
-            with patch(
-                "app.user_web.routes.DOCUMENT_STORAGE",
-                Path(directory),
+            with (
+                patch(
+                    "app.user_web.routes.DOCUMENT_STORAGE",
+                    Path(directory),
+                ),
+                patch(
+                    "app.user_web.routes.record_audit_event",
+                    return_value=True,
+                ) as audit,
             ):
                 response = view_user_document(
                     document.id,
+                    build_request(
+                        path=f"/user/documents/{document.id}/view"
+                    ),
                     session,
                     ViewDatabase(True),
                 )
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(has_viewed_document(session, document.id))
+        self.assertEqual(
+            audit.call_args.kwargs["event_type"],
+            "DOCUMENT_VIEWED",
+        )
 
 
 class UserSignatureRequestTests(unittest.TestCase):
@@ -808,6 +825,18 @@ class UserSignatureRequestTests(unittest.TestCase):
         self.assertEqual(
             signature_request.consent_version,
             CONSENT_VERSION,
+        )
+        audit_event_types = {
+            record.event_type
+            for record in database.added
+            if isinstance(record, SecurityAuditEvent)
+        }
+        self.assertEqual(
+            audit_event_types,
+            {
+                "CONSENT_RECORDED",
+                "SIGNATURE_REQUEST_CREATED",
+            },
         )
         self.assertEqual(database.commit_count, 1)
         document_lookup = str(

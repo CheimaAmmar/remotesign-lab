@@ -106,6 +106,9 @@ def reject_sign(
     session_id=None,
     document_id=None,
     terminal_queue_failure: bool = False,
+    audit_event_type: str = "SIGNATURE_FAILED",
+    failure_code: str | None = None,
+    request: Request | None = None,
 ) -> None:
 
     # Libère la transaction courante et notamment
@@ -124,13 +127,21 @@ def reject_sign(
 
     record_audit_event(
         database,
-        event_type="DOCUMENT_SIGN_REJECTED",
-        outcome="FAILED",
+        event_type=audit_event_type,
+        outcome=(
+            "DENIED"
+            if 400 <= status_code < 500
+            else "FAILURE"
+        ),
+        actor_type="DEVICE",
         user_id=user_id,
         device_id=device_id,
         session_id=session_id,
         document_id=document_id,
+        failure_code=failure_code,
+        request=request,
         source_ip=source_ip,
+        http_status=status_code,
         detail=audit_detail,
     )
 
@@ -859,6 +870,21 @@ def sign_document(
             document_id=document.id,
         )
 
+    add_audit_event(
+        database,
+        event_type="SIGNATURE_STARTED",
+        outcome="SUCCESS",
+        actor_type="DEVICE",
+        actor_id=device.device_uid,
+        user_id=auth_session.user_id,
+        device_id=device.id,
+        session_id=auth_session.id,
+        document_id=document.id,
+        request=request,
+        http_status=status.HTTP_200_OK,
+        detail="Cryptographic signature workflow started",
+    )
+
     # ==================================================
     # DIGEST FIABLE
     # ==================================================
@@ -891,6 +917,8 @@ def sign_document(
             device_id=device.id,
             session_id=auth_session.id,
             document_id=document.id,
+            failure_code="HSM_SIGNING_FAILED",
+            request=request,
         )
 
     # ==================================================
@@ -950,8 +978,10 @@ def sign_document(
             document_id=document.id,
         )
 
+    pades_service = PAdESService()
+
     try:
-        pades_result = PAdESService().sign_pdf(
+        pades_result = pades_service.sign_pdf(
             source_pdf_path=document_path,
             output_pdf_path=temporary_signed_path,
             signature_id=signature_id,
@@ -961,9 +991,14 @@ def sign_document(
             temporary_signed_path,
             final_signed_path,
         )
-    except (OSError, PAdESServiceError):
+    except (OSError, PAdESServiceError) as pades_error:
         temporary_signed_path.unlink(missing_ok=True)
         final_signed_path.unlink(missing_ok=True)
+        pades_failure = str(pades_error).lower()
+        tsa_failure = (
+            "tsa" in pades_failure
+            or "timestamp" in pades_failure
+        )
         reject_sign(
             database,
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -974,6 +1009,17 @@ def sign_document(
             device_id=device.id,
             session_id=auth_session.id,
             document_id=document.id,
+            audit_event_type=(
+                "TSA_TIMESTAMP_FAILED"
+                if tsa_failure
+                else "PADES_VALIDATION_FAILED"
+            ),
+            failure_code=(
+                "TSA_UNAVAILABLE"
+                if tsa_failure
+                else "PADES_CREATION_FAILED"
+            ),
+            request=request,
         )
 
     if not final_signed_path.is_file():
@@ -987,6 +1033,9 @@ def sign_document(
             device_id=device.id,
             session_id=auth_session.id,
             document_id=document.id,
+            audit_event_type="PADES_VALIDATION_FAILED",
+            failure_code="SIGNED_DOCUMENT_MISSING",
+            request=request,
         )
 
     # ==================================================
@@ -1026,10 +1075,75 @@ def sign_document(
 
         database.flush()
 
-        try_mark_signature_request_signed(
+        signature_request = try_mark_signature_request_signed(
             database,
             authentication_session_id=auth_session.id,
             signature=signature_record,
+        )
+
+        if pades_result.timestamp_time is not None:
+            add_audit_event(
+                database,
+                event_type="TSA_TIMESTAMP_SUCCESS",
+                outcome="SUCCESS",
+                actor_type="SYSTEM",
+                user_id=auth_session.user_id,
+                device_id=device.id,
+                session_id=auth_session.id,
+                document_id=document.id,
+                signature_request_id=(
+                    signature_request.id
+                    if signature_request is not None
+                    else None
+                ),
+                signature_id=signature_record.id,
+                request=request,
+                http_status=status.HTTP_200_OK,
+                details={
+                    "timestamp_time": pades_result.timestamp_time,
+                    "tsa_subject": (
+                        pades_result.tsa_certificate_subject
+                    ),
+                },
+            )
+
+        add_audit_event(
+            database,
+            event_type="PADES_CREATED",
+            outcome="SUCCESS",
+            actor_type="SYSTEM",
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+            signature_request_id=(
+                signature_request.id
+                if signature_request is not None
+                else None
+            ),
+            signature_id=signature_record.id,
+            request=request,
+            http_status=status.HTTP_200_OK,
+            details={"pades_profile": pades_result.pades_profile},
+        )
+        add_audit_event(
+            database,
+            event_type="PADES_VALIDATION_SUCCESS",
+            outcome="SUCCESS",
+            actor_type="SYSTEM",
+            user_id=auth_session.user_id,
+            device_id=device.id,
+            session_id=auth_session.id,
+            document_id=document.id,
+            signature_request_id=(
+                signature_request.id
+                if signature_request is not None
+                else None
+            ),
+            signature_id=signature_record.id,
+            request=request,
+            http_status=status.HTTP_200_OK,
+            details={"pades_profile": pades_result.pades_profile},
         )
 
         # ==============================================
@@ -1054,14 +1168,22 @@ def sign_document(
 
         add_audit_event(
             database,
-            event_type="DOCUMENT_SIGNED",
+            event_type="SIGNATURE_SUCCESS",
             outcome="SUCCESS",
+            actor_type="DEVICE",
+            actor_id=device.device_uid,
             user_id=auth_session.user_id,
             device_id=device.id,
             session_id=auth_session.id,
             document_id=document.id,
             signature_id=signature_record.id,
-            source_ip=source_ip,
+            signature_request_id=(
+                signature_request.id
+                if signature_request is not None
+                else None
+            ),
+            request=request,
+            http_status=status.HTTP_200_OK,
             detail=(
                 "Document signed using SoftHSM as "
                 f"{pades_result.pades_profile}"

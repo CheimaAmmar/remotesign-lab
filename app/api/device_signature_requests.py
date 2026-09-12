@@ -101,7 +101,10 @@ def _authenticate_device(
             database,
             event_type="SIGNATURE_QUEUE_AUTH_REJECTED",
             outcome="FAILED",
-            source_ip=source_ip,
+            actor_type="DEVICE",
+            actor_id=device_uid,
+            request=request,
+            http_status=status.HTTP_401_UNAUTHORIZED,
             detail="Unknown device",
         )
         raise HTTPException(
@@ -119,7 +122,10 @@ def _authenticate_device(
             event_type="RATE_LIMIT_BLOCKED",
             outcome="FAILED",
             device_id=device.id,
-            source_ip=source_ip,
+            actor_type="DEVICE",
+            actor_id=device.device_uid,
+            request=request,
+            http_status=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many failed device queue requests",
         )
         raise HTTPException(
@@ -133,7 +139,10 @@ def _authenticate_device(
             event_type="SIGNATURE_QUEUE_AUTH_REJECTED",
             outcome="FAILED",
             device_id=device.id,
-            source_ip=source_ip,
+            actor_type="DEVICE",
+            actor_id=device.device_uid,
+            request=request,
+            http_status=status.HTTP_403_FORBIDDEN,
             detail="Device is not active",
         )
         raise HTTPException(
@@ -147,7 +156,10 @@ def _authenticate_device(
             event_type="SIGNATURE_QUEUE_AUTH_REJECTED",
             outcome="FAILED",
             device_id=device.id,
-            source_ip=source_ip,
+            actor_type="DEVICE",
+            actor_id=device.device_uid,
+            request=request,
+            http_status=status.HTTP_401_UNAUTHORIZED,
             detail="Missing device authentication secret",
         )
         raise HTTPException(
@@ -171,7 +183,10 @@ def _authenticate_device(
             event_type="SIGNATURE_QUEUE_AUTH_REJECTED",
             outcome="FAILED",
             device_id=device.id,
-            source_ip=source_ip,
+            actor_type="DEVICE",
+            actor_id=device.device_uid,
+            request=request,
+            http_status=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid device HMAC",
         )
         raise HTTPException(
@@ -191,7 +206,10 @@ def _authenticate_device(
             event_type="SIGNATURE_QUEUE_AUTH_REJECTED",
             outcome="FAILED",
             device_id=device.id,
-            source_ip=source_ip,
+            actor_type="DEVICE",
+            actor_id=device.device_uid,
+            request=request,
+            http_status=status.HTTP_401_UNAUTHORIZED,
             detail="Device queue nonce replay detected",
         )
         raise HTTPException(
@@ -265,9 +283,13 @@ def claim_next_request(
         database,
         event_type="SIGNATURE_REQUEST_CLAIMED",
         outcome="SUCCESS",
+        actor_type="DEVICE",
+        actor_id=device.device_uid,
         device_id=device.id,
         document_id=signature_request.document_id,
-        source_ip=_source_ip(request),
+        signature_request_id=signature_request.id,
+        request=request,
+        http_status=status.HTTP_200_OK,
         detail=(
             "Signature request claimed by target device"
         ),
@@ -361,11 +383,16 @@ def report_request_status(
 
     add_audit_event(
         database,
-        event_type="SIGNATURE_REQUEST_FAILURE_REPORTED",
-        outcome="SUCCESS",
+        event_type="SIGNATURE_REQUEST_FAILED",
+        outcome="FAILURE",
+        actor_type="DEVICE",
+        actor_id=device.device_uid,
         device_id=device.id,
         document_id=signature_request.document_id,
-        source_ip=_source_ip(request),
+        signature_request_id=signature_request.id,
+        failure_code=failure_code,
+        request=request,
+        http_status=status.HTTP_200_OK,
         detail=f"Failure state recorded: {failure_code}",
     )
     device.last_seen = utc_now()

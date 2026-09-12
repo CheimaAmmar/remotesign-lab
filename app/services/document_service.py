@@ -95,7 +95,7 @@ def store_document(
     )
 
     database.add(document)
-    database.commit()
+    database.flush()
     database.refresh(document)
 
     return {

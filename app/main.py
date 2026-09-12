@@ -18,6 +18,9 @@ from app.web.routes import (
     WEB_STATIC,
     router as web_router,
 )
+from app.web.audit_routes import (
+    router as web_audit_router,
+)
 from app.user_web.routes import (
     USER_WEB_STATIC,
     router as user_web_router,
@@ -59,6 +62,7 @@ app.mount(
     StaticFiles(directory=WEB_STATIC),
     name="ui-static",
 )
+app.include_router(web_audit_router)
 app.include_router(web_router)
 app.mount(
     "/user/static",

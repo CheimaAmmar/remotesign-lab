@@ -12,6 +12,10 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.security.admin_auth import require_admin
+from app.services.audit_service import (
+    sanitize_audit_details,
+    sanitize_legacy_detail,
+)
 
 from app.models import (
     AuthenticationSession,
@@ -170,7 +174,12 @@ def get_signature_audit(
                     event.source_ip,
 
                 "detail":
-                    event.detail,
+                    sanitize_legacy_detail(event.detail),
+
+                "details":
+                    sanitize_audit_details(
+                        getattr(event, "details", None)
+                    ),
 
                 "created_at":
                     (

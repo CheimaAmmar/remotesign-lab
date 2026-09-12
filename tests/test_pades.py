@@ -947,9 +947,24 @@ class SignatureVerificationEndpointTests(unittest.TestCase):
                     "PAdESService",
                     return_value=service,
                 ),
+                patch.object(
+                    signature_api,
+                    "_record_verification_event",
+                ) as audit,
             ):
                 response = signature_api.verify_signature(
                     str(signature_id),
+                    SimpleNamespace(
+                        client=None,
+                        method="GET",
+                        url=SimpleNamespace(
+                            path=(
+                                "/api/v1/signatures/"
+                                f"{signature_id}/verify"
+                            )
+                        ),
+                        headers={},
+                    ),
                     VerificationDatabase(),
                 )
 
@@ -966,6 +981,16 @@ class SignatureVerificationEndpointTests(unittest.TestCase):
             self.assertIn(
                 "Stage-HSM Development TSA",
                 response["tsa_subject"],
+            )
+            self.assertEqual(
+                [
+                    call.kwargs["event_type"]
+                    for call in audit.call_args_list
+                ],
+                [
+                    "SIGNATURE_VERIFY_REQUESTED",
+                    "SIGNATURE_VERIFY_SUCCESS",
+                ],
             )
 
 
@@ -1430,12 +1455,26 @@ class SignedDocumentDownloadTests(unittest.TestCase):
                 expires_at=999999999.0,
             )
 
-            with patch(
-                "app.user_web.routes.SIGNED_DOCUMENT_STORAGE",
-                root,
+            with (
+                patch(
+                    "app.user_web.routes.SIGNED_DOCUMENT_STORAGE",
+                    root,
+                ),
+                patch(
+                    "app.user_web.routes.record_audit_event",
+                    return_value=True,
+                ) as audit,
             ):
                 response = download_user_signed_document(
                     document.id,
+                    SimpleNamespace(
+                        client=None,
+                        method="GET",
+                        url=SimpleNamespace(
+                            path=f"/user/documents/{document.id}/signed"
+                        ),
+                        headers={},
+                    ),
                     session,
                     SignedDownloadDatabase(document, signature),
                 )
@@ -1445,6 +1484,10 @@ class SignedDocumentDownloadTests(unittest.TestCase):
             self.assertEqual(
                 response.media_type,
                 "application/pdf",
+            )
+            self.assertEqual(
+                audit.call_args.kwargs["event_type"],
+                "SIGNED_DOCUMENT_DOWNLOADED",
             )
 
     def test_user_cannot_download_another_users_signed_pdf(
@@ -1465,6 +1508,14 @@ class SignedDocumentDownloadTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as rejected:
             download_user_signed_document(
                 document.id,
+                SimpleNamespace(
+                    client=None,
+                    method="GET",
+                    url=SimpleNamespace(
+                        path=f"/user/documents/{document.id}/signed"
+                    ),
+                    headers={},
+                ),
                 session,
                 SignedDownloadDatabase(
                     document,

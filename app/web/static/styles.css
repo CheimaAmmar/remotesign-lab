@@ -620,6 +620,146 @@ body[data-workflow-state="SIGNATURE_REFUSED"] .status-panel {
   background: linear-gradient(180deg, #fff 0%, var(--danger-soft) 160%);
 }
 
+.audit-panel {
+  margin-top: 1.5rem;
+}
+
+.audit-heading,
+.audit-actions,
+.audit-pagination,
+.audit-details-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.audit-heading h2,
+.audit-details-heading h3 {
+  margin-bottom: 0.25rem;
+}
+
+.audit-heading p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.audit-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.audit-integrity {
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  background: #eef2f0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.audit-integrity.is-valid {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.audit-integrity.is-invalid {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.audit-filters {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(8rem, 1fr)) auto;
+  align-items: end;
+  gap: 0.8rem;
+  margin: 1.4rem 0;
+}
+
+.audit-filters label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.audit-filters input,
+.audit-filters select {
+  min-width: 0;
+  padding: 0.62rem;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  background: #fff;
+  color: var(--ink);
+}
+
+.audit-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+}
+
+.audit-table {
+  width: 100%;
+  min-width: 78rem;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.audit-table th,
+.audit-table td {
+  padding: 0.7rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.audit-table th {
+  background: #f5f8f7;
+  color: var(--muted);
+  font-size: 0.67rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.audit-row {
+  cursor: pointer;
+}
+
+.audit-row:hover,
+.audit-row:focus {
+  outline: none;
+  background: #f3f8f6;
+}
+
+.audit-pagination {
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.audit-details {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  background: #f8faf9;
+}
+
+.audit-details pre {
+  max-height: 28rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+}
+
+@media (max-width: 70rem) {
+  .audit-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 52rem) {
   .workspace-grid {
     grid-template-columns: 1fr;
@@ -658,6 +798,16 @@ body[data-workflow-state="SIGNATURE_REFUSED"] .status-panel {
 
   .signature-action .button {
     width: 100%;
+  }
+
+  .audit-heading,
+  .audit-details-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .audit-filters {
+    grid-template-columns: 1fr;
   }
 }
 

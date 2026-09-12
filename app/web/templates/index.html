@@ -147,6 +147,108 @@
         <p id="request-reference" class="request-reference monospace" hidden></p>
       </aside>
     </div>
+
+    <section id="audit-panel" class="panel audit-panel" aria-labelledby="audit-title">
+      <div class="audit-heading">
+        <div>
+          <p class="eyebrow">Sécurité et traçabilité</p>
+          <h2 id="audit-title">Journal d’audit</h2>
+          <p>Consultation en lecture seule des événements applicatifs.</p>
+        </div>
+        <div class="audit-actions">
+          <span id="audit-integrity" class="audit-integrity" role="status">Intégrité non vérifiée</span>
+          <a id="audit-export" class="button button-quiet" href="/ui/api/audit/export.csv">Exporter CSV</a>
+        </div>
+      </div>
+
+      <form id="audit-filters" class="audit-filters">
+        <label>
+          Catégorie
+          <select name="category">
+            <option value="">Toutes</option>
+            <option>AUTH</option>
+            <option>DOCUMENT</option>
+            <option>CONSENT</option>
+            <option>SIGNATURE_REQUEST</option>
+            <option>DEVICE_AUTH</option>
+            <option>SIGNATURE</option>
+            <option>PADES</option>
+            <option>TSA</option>
+            <option>ADMIN</option>
+            <option>SECURITY</option>
+          </select>
+        </label>
+        <label>
+          Événement
+          <input name="event_type" type="text" maxlength="64" placeholder="SIGNATURE_SUCCESS">
+        </label>
+        <label>
+          Acteur
+          <select name="actor_type">
+            <option value="">Tous</option>
+            <option>USER</option>
+            <option>ADMIN</option>
+            <option>DEVICE</option>
+            <option>SYSTEM</option>
+          </select>
+        </label>
+        <label>
+          Résultat
+          <select name="outcome">
+            <option value="">Tous</option>
+            <option>SUCCESS</option>
+            <option>FAILURE</option>
+            <option>DENIED</option>
+          </select>
+        </label>
+        <label>
+          Document
+          <input name="document_id" type="text" inputmode="text" placeholder="UUID">
+        </label>
+        <label>
+          Code
+          <input name="failure_code" type="text" maxlength="64" placeholder="INVALID_HMAC">
+        </label>
+        <button class="button button-primary" type="submit">Filtrer</button>
+      </form>
+
+      <div class="audit-table-wrap">
+        <table class="audit-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Catégorie</th>
+              <th>Événement</th>
+              <th>Acteur</th>
+              <th>Utilisateur</th>
+              <th>Device</th>
+              <th>Document</th>
+              <th>Request</th>
+              <th>Signature</th>
+              <th>Résultat</th>
+              <th>Code</th>
+            </tr>
+          </thead>
+          <tbody id="audit-rows">
+            <tr><td colspan="11">Chargement du journal…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="audit-pagination">
+        <button id="audit-previous" class="button button-quiet" type="button" disabled>Précédent</button>
+        <span id="audit-page">—</span>
+        <button id="audit-next" class="button button-quiet" type="button" disabled>Suivant</button>
+      </div>
+
+      <section id="audit-details" class="audit-details" aria-labelledby="audit-details-title" hidden>
+        <div class="audit-details-heading">
+          <h3 id="audit-details-title">Détails de l’événement</h3>
+          <button id="audit-details-close" class="button button-quiet" type="button">Fermer</button>
+        </div>
+        <pre id="audit-details-content"></pre>
+      </section>
+    </section>
   </main>
 </body>
 </html>
