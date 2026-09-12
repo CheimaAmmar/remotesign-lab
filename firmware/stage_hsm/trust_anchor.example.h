@@ -1,0 +1,7 @@
+#pragma once
+
+static const char SERVER_CA_CERT[] PROGMEM = R"EOF(
+-----BEGIN CERTIFICATE-----
+REPLACE_WITH_SERVER_CA_CERTIFICATE
+-----END CERTIFICATE-----
+)EOF";
