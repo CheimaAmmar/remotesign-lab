@@ -24,6 +24,7 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Request,
     status,
 )
 
@@ -47,6 +48,7 @@ from app.services.pades_service import (
     PAdESServiceError,
     SIGNED_DOCUMENT_STORAGE,
 )
+from app.services.audit_service import record_audit_event
 
 
 router = APIRouter(
@@ -69,6 +71,38 @@ DOCUMENT_STORAGE = (
 )
 
 
+def _record_verification_event(
+    database: Session,
+    *,
+    request: Request | None,
+    event_type: str,
+    outcome: str,
+    signature_record=None,
+    document=None,
+    failure_code: str | None = None,
+    detail: str | None = None,
+) -> None:
+    if not hasattr(database, "get_bind"):
+        return
+
+    record_audit_event(
+        database,
+        event_type=event_type,
+        outcome=outcome,
+        actor_type="ADMIN",
+        actor_id="prototype-admin",
+        user_id=getattr(signature_record, "user_id", None),
+        device_id=getattr(signature_record, "device_id", None),
+        session_id=getattr(signature_record, "session_id", None),
+        document_id=getattr(document, "id", None),
+        signature_id=getattr(signature_record, "id", None),
+        failure_code=failure_code,
+        request=request,
+        http_status=status.HTTP_200_OK,
+        detail=detail,
+    )
+
+
 # ======================================================
 # VERIFY SIGNATURE
 # ======================================================
@@ -79,6 +113,7 @@ DOCUMENT_STORAGE = (
 )
 def verify_signature(
     signature_id: str,
+    request: Request,
     database: Session = Depends(get_db),
 ) -> dict:
 
@@ -152,6 +187,16 @@ def verify_signature(
             detail="Document not found",
         )
 
+    _record_verification_event(
+        database,
+        request=request,
+        event_type="SIGNATURE_VERIFY_REQUESTED",
+        outcome="SUCCESS",
+        signature_record=signature_record,
+        document=document,
+        detail="Signature verification requested",
+    )
+
     # ==================================================
     # DOCUMENT SUR DISQUE
     # ==================================================
@@ -215,6 +260,17 @@ def verify_signature(
         != document.document_hash
     ):
 
+        _record_verification_event(
+            database,
+            request=request,
+            event_type="SIGNATURE_VERIFY_FAILED",
+            outcome="FAILURE",
+            signature_record=signature_record,
+            document=document,
+            failure_code="DOCUMENT_HASH_MISMATCH",
+            detail="Stored document integrity verification failed",
+        )
+
         return {
             "valid": False,
 
@@ -232,6 +288,17 @@ def verify_signature(
         actual_document_hash
         != signature_record.document_hash
     ):
+
+        _record_verification_event(
+            database,
+            request=request,
+            event_type="SIGNATURE_VERIFY_FAILED",
+            outcome="FAILURE",
+            signature_record=signature_record,
+            document=document,
+            failure_code="DOCUMENT_HASH_MISMATCH",
+            detail="Signature document hash verification failed",
+        )
 
         return {
             "valid": False,
@@ -263,6 +330,17 @@ def verify_signature(
         binascii.Error,
         ValueError,
     ):
+
+        _record_verification_event(
+            database,
+            request=request,
+            event_type="SIGNATURE_VERIFY_FAILED",
+            outcome="FAILURE",
+            signature_record=signature_record,
+            document=document,
+            failure_code="SIGNATURE_ENCODING_INVALID",
+            detail="Stored signature encoding is invalid",
+        )
 
         return {
             "valid": False,
@@ -343,6 +421,17 @@ def verify_signature(
 
     except InvalidSignature:
 
+        _record_verification_event(
+            database,
+            request=request,
+            event_type="SIGNATURE_VERIFY_FAILED",
+            outcome="FAILURE",
+            signature_record=signature_record,
+            document=document,
+            failure_code="SIGNATURE_CRYPTOGRAPHIC_INVALID",
+            detail="Cryptographic signature verification failed",
+        )
+
         return {
             "valid": False,
 
@@ -383,6 +472,16 @@ def verify_signature(
             )
             or not signed_pdf_path.is_file()
         ):
+            _record_verification_event(
+                database,
+                request=request,
+                event_type="SIGNATURE_VERIFY_FAILED",
+                outcome="FAILURE",
+                signature_record=signature_record,
+                document=document,
+                failure_code="SIGNED_DOCUMENT_MISSING",
+                detail="Signed PAdES document file is missing",
+            )
             return {
                 "valid": False,
                 "signature_id": str(signature_record.id),
@@ -396,6 +495,16 @@ def verify_signature(
                 expected_profile=signature_record.pades_profile,
             )
         except PAdESServiceError as error:
+            _record_verification_event(
+                database,
+                request=request,
+                event_type="SIGNATURE_VERIFY_FAILED",
+                outcome="FAILURE",
+                signature_record=signature_record,
+                document=document,
+                failure_code="PADES_VALIDATION_FAILED",
+                detail="PAdES validation could not be completed",
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Unable to validate PAdES document",
@@ -501,6 +610,16 @@ def verify_signature(
             and fingerprint_matches
             and timestamp_metadata_matches
         ):
+            _record_verification_event(
+                database,
+                request=request,
+                event_type="SIGNATURE_VERIFY_FAILED",
+                outcome="FAILURE",
+                signature_record=signature_record,
+                document=document,
+                failure_code="PADES_VALIDATION_FAILED",
+                detail="PAdES signature validation failed",
+            )
             return {
                 "valid": False,
                 "signature_id": str(signature_record.id),
@@ -512,6 +631,16 @@ def verify_signature(
     # ==================================================
     # SIGNATURE VALIDE
     # ==================================================
+
+    _record_verification_event(
+        database,
+        request=request,
+        event_type="SIGNATURE_VERIFY_SUCCESS",
+        outcome="SUCCESS",
+        signature_record=signature_record,
+        document=document,
+        detail="Signature verification succeeded",
+    )
 
     return {
         "valid": True,

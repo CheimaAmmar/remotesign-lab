@@ -92,6 +92,16 @@ const elements = {
   queueStateReference: document.getElementById("queue-state-reference"),
   queueState: document.getElementById("queue-state"),
   requestReference: document.getElementById("request-reference"),
+  auditIntegrity: document.getElementById("audit-integrity"),
+  auditExport: document.getElementById("audit-export"),
+  auditFilters: document.getElementById("audit-filters"),
+  auditRows: document.getElementById("audit-rows"),
+  auditPrevious: document.getElementById("audit-previous"),
+  auditNext: document.getElementById("audit-next"),
+  auditPage: document.getElementById("audit-page"),
+  auditDetails: document.getElementById("audit-details"),
+  auditDetailsContent: document.getElementById("audit-details-content"),
+  auditDetailsClose: document.getElementById("audit-details-close"),
 };
 
 let csrfToken = "";
@@ -100,6 +110,9 @@ let currentDocument = null;
 let pollingTimer = null;
 let pollingGeneration = 0;
 const reachedStates = new Set();
+const AUDIT_PAGE_SIZE = 25;
+let auditOffset = 0;
+let auditTotal = 0;
 
 class SessionExpiredError extends Error {}
 
@@ -335,12 +348,137 @@ async function loadSession() {
     elements.logoutButton.disabled = false;
     await loadAssignableUsers();
     await restoreDocumentFromUrl();
+    await Promise.all([loadAuditEvents(), loadAuditIntegrity()]);
   } catch (error) {
     if (!(error instanceof SessionExpiredError)) {
       showAlert("Impossible de vérifier la session. Vérifiez la connexion au serveur.");
       elements.sessionIndicator.textContent = "Session indisponible";
     }
   }
+}
+
+function auditQueryParameters(includePagination = true) {
+  const parameters = new URLSearchParams();
+  const formData = new FormData(elements.auditFilters);
+
+  for (const [name, rawValue] of formData.entries()) {
+    const value = String(rawValue).trim();
+    if (value) {
+      parameters.set(name, value);
+    }
+  }
+
+  if (includePagination) {
+    parameters.set("limit", String(AUDIT_PAGE_SIZE));
+    parameters.set("offset", String(auditOffset));
+  }
+
+  return parameters;
+}
+
+function shortIdentifier(value) {
+  if (typeof value !== "string" || !value) {
+    return "—";
+  }
+  return value.length > 13 ? `${value.slice(0, 8)}…` : value;
+}
+
+function auditCell(row, value, className = "") {
+  const cell = document.createElement("td");
+  cell.textContent = value === null || value === undefined || value === "" ? "—" : String(value);
+  if (className) {
+    cell.className = className;
+  }
+  row.append(cell);
+}
+
+async function showAuditDetails(eventId) {
+  const response = await apiFetch(`/ui/api/audit/${encodeURIComponent(eventId)}`, { method: "GET" });
+  const payload = await readJson(response);
+
+  if (!response.ok || !payload) {
+    throw new Error(errorMessage(payload, "Impossible de charger l’événement d’audit."));
+  }
+
+  elements.auditDetailsContent.textContent = JSON.stringify(payload, null, 2);
+  elements.auditDetails.hidden = false;
+  elements.auditDetails.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function renderAuditEvents(payload) {
+  elements.auditRows.replaceChildren();
+  const items = payload && Array.isArray(payload.items) ? payload.items : [];
+  auditTotal = Number(payload && payload.total) || 0;
+
+  if (items.length === 0) {
+    const row = document.createElement("tr");
+    auditCell(row, "Aucun événement pour ces filtres.");
+    row.firstElementChild.colSpan = 11;
+    elements.auditRows.append(row);
+  }
+
+  for (const item of items) {
+    const row = document.createElement("tr");
+    row.tabIndex = 0;
+    row.className = "audit-row";
+    row.title = "Afficher les détails";
+    const open = () => showAuditDetails(item.id).catch((error) => showAlert(error.message));
+    row.addEventListener("click", open);
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        open();
+      }
+    });
+    auditCell(row, item.created_at ? formatDateTime(item.created_at) : "—");
+    auditCell(row, item.category);
+    auditCell(row, item.event_type, "monospace");
+    auditCell(row, item.actor_type);
+    auditCell(row, shortIdentifier(item.user_id), "monospace");
+    auditCell(row, shortIdentifier(item.device_id), "monospace");
+    auditCell(row, shortIdentifier(item.document_id), "monospace");
+    auditCell(row, shortIdentifier(item.signature_request_id), "monospace");
+    auditCell(row, shortIdentifier(item.signature_id), "monospace");
+    auditCell(row, item.outcome);
+    auditCell(row, item.failure_code, "monospace");
+    elements.auditRows.append(row);
+  }
+
+  const first = auditTotal === 0 ? 0 : auditOffset + 1;
+  const last = Math.min(auditOffset + items.length, auditTotal);
+  elements.auditPage.textContent = `${first}–${last} sur ${auditTotal}`;
+  elements.auditPrevious.disabled = auditOffset === 0;
+  elements.auditNext.disabled = auditOffset + items.length >= auditTotal;
+  const exportParameters = auditQueryParameters(false);
+  elements.auditExport.href = `/ui/api/audit/export.csv?${exportParameters.toString()}`;
+}
+
+async function loadAuditEvents() {
+  const parameters = auditQueryParameters(true);
+  const response = await apiFetch(`/ui/api/audit?${parameters.toString()}`, { method: "GET" });
+  const payload = await readJson(response);
+
+  if (!response.ok || !payload || !Array.isArray(payload.items)) {
+    throw new Error(errorMessage(payload, "Impossible de charger le journal d’audit."));
+  }
+
+  renderAuditEvents(payload);
+}
+
+async function loadAuditIntegrity() {
+  const response = await apiFetch("/ui/api/audit/integrity", { method: "GET" });
+  const payload = await readJson(response);
+
+  if (!response.ok || !payload) {
+    elements.auditIntegrity.textContent = "Vérification indisponible";
+    elements.auditIntegrity.className = "audit-integrity is-invalid";
+    return;
+  }
+
+  elements.auditIntegrity.textContent = payload.valid
+    ? `Chaîne valide · ${payload.chained_events} événements scellés`
+    : `Chaîne invalide · événement ${shortIdentifier(payload.first_invalid_event_id)}`;
+  elements.auditIntegrity.className = `audit-integrity ${payload.valid ? "is-valid" : "is-invalid"}`;
 }
 
 async function loadAssignableUsers() {
@@ -626,5 +764,24 @@ async function logout(event) {
 elements.fileInput.addEventListener("change", handleFileSelection);
 elements.uploadForm.addEventListener("submit", uploadDocument);
 elements.logoutForm.addEventListener("submit", logout);
+elements.auditFilters.addEventListener("submit", (event) => {
+  event.preventDefault();
+  auditOffset = 0;
+  loadAuditEvents().catch((error) => showAlert(error.message));
+});
+elements.auditPrevious.addEventListener("click", () => {
+  auditOffset = Math.max(0, auditOffset - AUDIT_PAGE_SIZE);
+  loadAuditEvents().catch((error) => showAlert(error.message));
+});
+elements.auditNext.addEventListener("click", () => {
+  if (auditOffset + AUDIT_PAGE_SIZE < auditTotal) {
+    auditOffset += AUDIT_PAGE_SIZE;
+    loadAuditEvents().catch((error) => showAlert(error.message));
+  }
+});
+elements.auditDetailsClose.addEventListener("click", () => {
+  elements.auditDetails.hidden = true;
+  elements.auditDetailsContent.textContent = "";
+});
 
 loadSession();

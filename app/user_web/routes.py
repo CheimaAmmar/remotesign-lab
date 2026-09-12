@@ -54,7 +54,10 @@ from app.security.user_session import (
     require_user_csrf,
     require_user_session,
 )
-from app.services.audit_service import add_audit_event
+from app.services.audit_service import (
+    add_audit_event,
+    record_audit_event,
+)
 from app.services.document_service import DOCUMENT_STORAGE
 from app.services.pades_service import SIGNED_DOCUMENT_STORAGE
 from app.services.signature_request_service import (
@@ -364,6 +367,22 @@ def create_user_web_session(
         or user.status != UserStatus.ACTIVE
         or not valid_password
     ):
+        record_audit_event(
+            database,
+            event_type="USER_LOGIN_FAILED",
+            outcome="DENIED",
+            actor_type="USER",
+            actor_id=(
+                str(user.id)
+                if user is not None
+                else None
+            ),
+            user_id=(user.id if user is not None else None),
+            failure_code="INVALID_USER_CREDENTIALS",
+            request=request,
+            http_status=status.HTTP_303_SEE_OTHER,
+            detail="User Web login rejected",
+        )
         return _redirect("/user/login?error=invalid")
 
     delete_user_session(
@@ -385,8 +404,10 @@ def create_user_web_session(
         database,
         event_type="USER_WEB_LOGIN",
         outcome="SUCCESS",
+        actor_type="USER",
         user_id=user.id,
-        source_ip=_source_ip(request),
+        request=request,
+        http_status=status.HTTP_303_SEE_OTHER,
         detail="User Web session created",
     )
     database.commit()
@@ -432,7 +453,8 @@ def user_session_information(
 @router.post("/logout")
 def user_logout(
     request: Request,
-    _session: UserSession = Depends(require_user_csrf),
+    session: UserSession = Depends(require_user_csrf),
+    database: Session = Depends(get_db),
 ) -> JSONResponse:
     delete_user_session(
         request.cookies.get(USER_SESSION_COOKIE_NAME)
@@ -445,6 +467,18 @@ def user_logout(
         httponly=True,
         samesite="strict",
     )
+
+    if hasattr(database, "add"):
+        add_audit_event(
+            database,
+            event_type="USER_LOGOUT",
+            outcome="SUCCESS",
+            actor_type="USER",
+            user_id=session.user_id,
+            request=request,
+            http_status=status.HTTP_200_OK,
+        )
+        database.commit()
 
     return response
 
@@ -542,6 +576,7 @@ def list_user_documents(
 @router.get("/documents/{document_id}/view")
 def view_user_document(
     document_id: uuid.UUID,
+    request: Request,
     session: UserSession = Depends(require_user_session),
     database: Session = Depends(get_db),
 ) -> FileResponse:
@@ -574,6 +609,18 @@ def view_user_document(
 
     mark_document_viewed(session, document.id)
 
+    record_audit_event(
+        database,
+        event_type="DOCUMENT_VIEWED",
+        outcome="SUCCESS",
+        actor_type="USER",
+        user_id=session.user_id,
+        document_id=document.id,
+        request=request,
+        http_status=status.HTTP_200_OK,
+        details={"delivery": "inline"},
+    )
+
     return FileResponse(
         document_path,
         media_type="application/pdf",
@@ -586,6 +633,7 @@ def view_user_document(
 @router.get("/documents/{document_id}/signed")
 def download_user_signed_document(
     document_id: uuid.UUID,
+    request: Request,
     session: UserSession = Depends(require_user_session),
     database: Session = Depends(get_db),
 ) -> FileResponse:
@@ -636,6 +684,19 @@ def download_user_signed_document(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Signed document file not found",
         )
+
+    record_audit_event(
+        database,
+        event_type="SIGNED_DOCUMENT_DOWNLOADED",
+        outcome="SUCCESS",
+        actor_type="USER",
+        user_id=session.user_id,
+        document_id=document.id,
+        signature_id=getattr(signature, "id", None),
+        request=request,
+        http_status=status.HTTP_200_OK,
+        details={"delivery": "attachment"},
+    )
 
     return FileResponse(
         signed_document_path,
@@ -729,13 +790,29 @@ def create_user_signature_request(
     database.flush()
     add_audit_event(
         database,
-        event_type="USER_SIGNATURE_REQUEST_CREATED",
+        event_type="CONSENT_RECORDED",
         outcome="SUCCESS",
+        actor_type="USER",
         user_id=session.user_id,
         device_id=device.id,
         document_id=document.id,
-        source_ip=_source_ip(request),
-        detail=f"User consent recorded ({CONSENT_VERSION})",
+        signature_request_id=signature_request.id,
+        request=request,
+        http_status=status.HTTP_202_ACCEPTED,
+        details={"consent_version": CONSENT_VERSION},
+    )
+    add_audit_event(
+        database,
+        event_type="SIGNATURE_REQUEST_CREATED",
+        outcome="SUCCESS",
+        actor_type="USER",
+        user_id=session.user_id,
+        device_id=device.id,
+        document_id=document.id,
+        signature_request_id=signature_request.id,
+        request=request,
+        http_status=status.HTTP_202_ACCEPTED,
+        detail="User signature request created",
     )
     database.commit()
 

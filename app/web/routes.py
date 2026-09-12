@@ -43,6 +43,10 @@ from app.security.ui_session import (
     require_ui_session,
 )
 from app.services.document_service import store_document
+from app.services.audit_service import (
+    add_audit_event,
+    record_audit_event,
+)
 from app.services.signature_request_service import (
     get_latest_signature_request_for_document,
 )
@@ -220,10 +224,22 @@ def login_page(request: Request) -> Response:
 def create_web_session(
     request: Request,
     admin_key: Annotated[str, Form(...)],
+    database: Session = Depends(get_db),
 ) -> Response:
     try:
         require_admin(admin_key)
     except HTTPException:
+        if hasattr(database, "get_bind"):
+            record_audit_event(
+                database,
+                event_type="ADMIN_LOGIN_FAILED",
+                outcome="DENIED",
+                actor_type="ADMIN",
+                failure_code="INVALID_ADMIN_CREDENTIALS",
+                request=request,
+                http_status=status.HTTP_303_SEE_OTHER,
+                detail="Administrator Web login rejected",
+            )
         return _redirect("/ui/login?error=1")
 
     delete_ui_session(
@@ -244,6 +260,19 @@ def create_web_session(
         samesite="strict",
         path="/ui",
     )
+
+    if hasattr(database, "add"):
+        add_audit_event(
+            database,
+            event_type="ADMIN_LOGIN_SUCCESS",
+            outcome="SUCCESS",
+            actor_type="ADMIN",
+            actor_id="prototype-admin",
+            request=request,
+            http_status=status.HTTP_303_SEE_OTHER,
+            detail="Administrator Web session created",
+        )
+        database.commit()
 
     return response
 
@@ -276,9 +305,10 @@ def session_information(
 @router.post("/logout")
 def logout(
     request: Request,
-    _session: UiSession = Depends(
+    session: UiSession = Depends(
         require_ui_csrf
     ),
+    database: Session = Depends(get_db),
 ) -> JSONResponse:
     delete_ui_session(
         request.cookies.get(
@@ -297,6 +327,18 @@ def logout(
         samesite="strict",
     )
 
+    if hasattr(database, "add"):
+        add_audit_event(
+            database,
+            event_type="ADMIN_LOGOUT",
+            outcome="SUCCESS",
+            actor_type="ADMIN",
+            actor_id="prototype-admin",
+            request=request,
+            http_status=status.HTTP_200_OK,
+        )
+        database.commit()
+
     return response
 
 
@@ -305,6 +347,7 @@ def logout(
     status_code=status.HTTP_201_CREATED,
 )
 def upload_document_from_web(
+    request: Request,
     file: UploadFile = File(...),
     user_id: uuid.UUID = Form(...),
     _session: UiSession = Depends(
@@ -337,6 +380,36 @@ def upload_document_from_web(
         "En attente d'une demande de signature depuis "
         "l'espace utilisateur."
     )
+
+    document_id = uuid.UUID(result["document_id"])
+    add_audit_event(
+        database,
+        event_type="DOCUMENT_UPLOADED",
+        outcome="SUCCESS",
+        actor_type="ADMIN",
+        actor_id="prototype-admin",
+        user_id=user.id,
+        document_id=document_id,
+        request=request,
+        http_status=status.HTTP_201_CREATED,
+        details={
+            "filename": result.get("filename"),
+            "size_bytes": result.get("size_bytes"),
+        },
+    )
+    add_audit_event(
+        database,
+        event_type="DOCUMENT_ASSIGNED",
+        outcome="SUCCESS",
+        actor_type="ADMIN",
+        actor_id="prototype-admin",
+        user_id=user.id,
+        document_id=document_id,
+        request=request,
+        http_status=status.HTTP_201_CREATED,
+        detail="Document assigned to its owner",
+    )
+    database.commit()
 
     return _json_response(
         result,

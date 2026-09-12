@@ -9,6 +9,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    JSON,
     Text,
     Integer,
     String,
@@ -241,6 +242,16 @@ class AuthenticationCredential(Base):
 class SecurityAuditEvent(Base):
     __tablename__ = "security_audit_events"
 
+    __table_args__ = (
+        CheckConstraint(
+            "(previous_hash IS NULL AND event_hash IS NULL) OR "
+            "(previous_hash IS NOT NULL AND event_hash IS NOT NULL "
+            "AND char_length(previous_hash) = 64 "
+            "AND char_length(event_hash) = 64)",
+            name="ck_security_audit_hash_pair",
+        ),
+    )
+
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
@@ -251,6 +262,23 @@ class SecurityAuditEvent(Base):
         String(64),
         nullable=False,
         index=True,
+    )
+
+    category: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        index=True,
+    )
+
+    actor_type: Mapped[str | None] = mapped_column(
+        String(16),
+        nullable=True,
+        index=True,
+    )
+
+    actor_id: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
     )
 
     outcome: Mapped[str] = mapped_column(
@@ -309,13 +337,69 @@ class SecurityAuditEvent(Base):
         index=True,
     )
 
+    signature_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "signature_requests.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    failure_code: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    correlation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        index=True,
+    )
+
+    http_method: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True,
+    )
+
+    http_path: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    http_status: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
     source_ip: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
     )
 
+    user_agent: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+    )
+
     detail: Mapped[str | None] = mapped_column(
         String(255),
+        nullable=True,
+    )
+
+    details: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    previous_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    event_hash: Mapped[str | None] = mapped_column(
+        String(64),
         nullable=True,
     )
 
