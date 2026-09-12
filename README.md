@@ -5,9 +5,6 @@ combines strong user authentication with a server-side RSA signing key
 protected through PKCS#11 and SoftHSM, and produces verifiable PAdES PDF
 signatures.
 
-> [!IMPORTANT]
-> This repository is a demonstration system, not production PKI or a
-> qualified electronic-signature service.
 
 ## Features
 
