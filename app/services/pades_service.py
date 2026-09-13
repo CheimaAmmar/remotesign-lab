@@ -76,7 +76,8 @@ class RemoteSignLabPKCS11Signer(pkcs11.PKCS11Signer):
         if not self._loaded:
             self._load_objects()
 
-        assert self._key_handle is not None
+        if self._key_handle is None:
+            raise RuntimeError("PKCS#11 signing key is not initialized")
         specification = self._select_pkcs11_signing_params(
             digest_algorithm,
             sign_kwargs=self.sign_kwargs(data),
