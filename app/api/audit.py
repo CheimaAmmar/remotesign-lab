@@ -35,7 +35,7 @@ router = APIRouter(
 
 
 # ======================================================
-# HISTORIQUE COMPLET D'UNE SIGNATURE
+# COMPLETE SIGNATURE HISTORY
 # ======================================================
 
 @router.get(
@@ -129,9 +129,9 @@ def get_signature_audit(
     )
 
     # ==================================================
-    # EVENEMENTS D'AUDIT
+    # AUDIT EVENTS
     #
-    # On utilise session_id afin de récupérer :
+    # Use session_id to retrieve:
     #
     # AUTH_CHALLENGE_CREATED
     # STRONG_AUTH_COMPLETED
@@ -152,7 +152,7 @@ def get_signature_audit(
     ).all()
 
     # ==================================================
-    # CONSTRUCTION TIMELINE
+    # TIMELINE CONSTRUCTION
     # ==================================================
 
     timeline = []
@@ -191,7 +191,7 @@ def get_signature_audit(
         )
 
     # ==================================================
-    # REPONSE
+    # RESPONSE
     # ==================================================
 
     return {

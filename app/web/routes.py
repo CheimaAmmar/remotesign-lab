@@ -93,26 +93,26 @@ router = APIRouter(
 
 SIGNATURE_REQUEST_MESSAGES = {
     SignatureRequestStatus.PENDING: (
-        "Demande créée par l'utilisateur. "
-        "En attente d'authentification forte."
+        "Request created by the user. "
+        "Waiting for strong authentication."
     ),
     SignatureRequestStatus.CLAIMED: (
-        "Demande récupérée par le terminal."
+        "Request retrieved by the device."
     ),
     SignatureRequestStatus.AUTHENTICATING: (
-        "Authentification forte en cours."
+        "Strong authentication in progress."
     ),
     SignatureRequestStatus.AUTHENTICATED: (
-        "Identité vérifiée. Signature cryptographique en cours."
+        "Identity verified. Cryptographic signing in progress."
     ),
     SignatureRequestStatus.SIGNED: (
-        "Signature réussie."
+        "Signature successful."
     ),
     SignatureRequestStatus.FAILED: (
-        "Signature refusée."
+        "Signature denied."
     ),
     SignatureRequestStatus.EXPIRED: (
-        "Demande expirée."
+        "Request expired."
     ),
 }
 
@@ -376,9 +376,9 @@ def upload_document_from_web(
     )
     result["user_id"] = str(user.id)
     result["message"] = (
-        "Document attribué à l'utilisateur. "
-        "En attente d'une demande de signature depuis "
-        "l'espace utilisateur."
+        "Document assigned to the user. "
+        "Waiting for a signature request from "
+        "the user area."
     )
 
     document_id = uuid.UUID(result["document_id"])

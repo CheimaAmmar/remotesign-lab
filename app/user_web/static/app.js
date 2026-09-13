@@ -10,32 +10,32 @@ const ACTIVE_STATES = new Set([
 ]);
 const STATE_PRESENTATION = Object.freeze({
   PENDING: {
-    title: "En attente de votre authentification forte",
-    message: "Authentifiez-vous sur le terminal ESP32.",
+    title: "Waiting for your strong authentication",
+    message: "Authenticate on the ESP32 device.",
   },
   CLAIMED: {
-    title: "Terminal connecté",
-    message: "La demande a été récupérée par le terminal ESP32.",
+    title: "Device connected",
+    message: "The request was retrieved by the ESP32 device.",
   },
   AUTHENTICATING: {
-    title: "Authentification en cours",
-    message: "Le terminal vérifie votre RFID et votre empreinte.",
+    title: "Authentication in progress",
+    message: "The device is checking your RFID and fingerprint.",
   },
   AUTHENTICATED: {
-    title: "Identité vérifiée",
-    message: "Signature cryptographique en cours.",
+    title: "Identity verified",
+    message: "Cryptographic signing in progress.",
   },
   SIGNED: {
-    title: "Document signé avec succès",
-    message: "La signature cryptographique est terminée.",
+    title: "Document signed successfully",
+    message: "Cryptographic signing is complete.",
   },
   FAILED: {
-    title: "Signature refusée",
-    message: "Vous pouvez recommencer avec un nouveau consentement.",
+    title: "Signature denied",
+    message: "You can start again with new consent.",
   },
   EXPIRED: {
-    title: "Demande expirée",
-    message: "Vous pouvez recommencer avec un nouveau consentement.",
+    title: "Request expired",
+    message: "You can start again with new consent.",
   },
 });
 
@@ -80,15 +80,15 @@ function formatDate(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? "—"
-    : date.toLocaleString("fr-FR");
+    : date.toLocaleString("en-US");
 }
 
 function formatBytes(value) {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return "—";
-  if (amount < 1024) return `${amount} octets`;
-  if (amount < 1024 * 1024) return `${(amount / 1024).toFixed(1)} Kio`;
-  return `${(amount / (1024 * 1024)).toFixed(1)} Mio`;
+  if (amount < 1024) return `${amount} bytes`;
+  if (amount < 1024 * 1024) return `${(amount / 1024).toFixed(1)} KiB`;
+  return `${(amount / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 function redirectToLogin() {
@@ -136,7 +136,7 @@ function renderDocuments(documents) {
   if (!documents.length) {
     const empty = document.createElement("p");
     empty.className = "empty-state";
-    empty.textContent = "Aucun document ne vous est actuellement attribué.";
+    empty.textContent = "No documents are currently assigned to you.";
     elements.documentsList.append(empty);
     return false;
   }
@@ -158,26 +158,26 @@ function renderDocuments(documents) {
     state.className = item.request
       ? `user-state user-state-${item.request.state.toLowerCase()}`
       : "user-state";
-    state.textContent = presentation ? presentation.title : "Aucune demande";
+    state.textContent = presentation ? presentation.title : "No request";
     const stateMessage = document.createElement("p");
     stateMessage.className = "user-request-message";
     stateMessage.textContent = presentation
       ? presentation.message
-      : "Aucune demande de signature active.";
+      : "No active signature request.";
     details.append(title, meta, state, stateMessage);
 
     if (item.request && item.request.state === "SIGNED") {
       const signatureMeta = document.createElement("p");
       signatureMeta.className = "user-signature-meta";
       const metadata = [];
-      if (item.request.signer_name) metadata.push(`Signataire : ${item.request.signer_name}`);
-      if (item.request.signed_at) metadata.push(`Date de signature : ${formatDate(item.request.signed_at)}`);
-      if (item.request.signature_id) metadata.push(`Signature : ${item.request.signature_id}`);
+      if (item.request.signer_name) metadata.push(`Signer: ${item.request.signer_name}`);
+      if (item.request.signed_at) metadata.push(`Signing date: ${formatDate(item.request.signed_at)}`);
+      if (item.request.signature_id) metadata.push(`Signature: ${item.request.signature_id}`);
       if (item.request.algorithm) metadata.push(String(item.request.algorithm));
-      if (item.request.pades_profile) metadata.push(`Profil : ${item.request.pades_profile}`);
-      if (item.request.certificate_subject) metadata.push(`Certificat : ${item.request.certificate_subject}`);
-      if (item.request.timestamp_time) metadata.push(`Horodatage : ${formatDate(item.request.timestamp_time)}`);
-      if (item.request.tsa_certificate_subject) metadata.push(`TSA : ${item.request.tsa_certificate_subject}`);
+      if (item.request.pades_profile) metadata.push(`Profile: ${item.request.pades_profile}`);
+      if (item.request.certificate_subject) metadata.push(`Certificate: ${item.request.certificate_subject}`);
+      if (item.request.timestamp_time) metadata.push(`Timestamp: ${formatDate(item.request.timestamp_time)}`);
+      if (item.request.tsa_certificate_subject) metadata.push(`TSA: ${item.request.tsa_certificate_subject}`);
       signatureMeta.textContent = metadata.join(" · ");
       if (metadata.length) details.append(signatureMeta);
     }
@@ -186,7 +186,7 @@ function renderDocuments(documents) {
     actions.className = "user-document-actions";
     const view = document.createElement("a");
     view.className = "button button-quiet";
-    view.textContent = "Voir le document";
+    view.textContent = "View document";
     view.href = `/user/documents/${encodeURIComponent(item.document_id)}/view`;
     view.target = "_blank";
     view.rel = "noopener";
@@ -196,13 +196,13 @@ function renderDocuments(documents) {
     if (item.request && item.request.state === "SIGNED") {
       const signedBadge = document.createElement("span");
       signedBadge.className = "user-state user-state-signed";
-      signedBadge.textContent = "Signé";
+      signedBadge.textContent = "Signed";
       actions.append(signedBadge);
 
       if (item.request.signed_document_available === true) {
         const download = document.createElement("a");
         download.className = "button button-primary";
-        download.textContent = "Télécharger le PDF signé";
+        download.textContent = "Download signed PDF";
         download.href = `/user/documents/${encodeURIComponent(item.document_id)}/signed`;
         actions.append(download);
       }
@@ -210,7 +210,7 @@ function renderDocuments(documents) {
       const sign = document.createElement("button");
       sign.className = "button button-accent";
       sign.type = "button";
-      sign.textContent = "Signer ce document";
+      sign.textContent = "Sign this document";
       sign.addEventListener("click", () => openConsent(item));
       actions.append(sign);
     }
@@ -260,20 +260,20 @@ async function loadSessionAndDocuments() {
 
     csrfToken = session.csrf_token;
     elements.userName.textContent = String(session.user.full_name);
-    elements.sessionIndicator.textContent = "Session utilisateur active";
+    elements.sessionIndicator.textContent = "User session active";
     elements.logoutButton.disabled = false;
 
     const documentsResponse = await apiFetch("/user/api/documents");
     const payload = await readJson(documentsResponse);
 
     if (!documentsResponse.ok || !payload || !Array.isArray(payload.documents)) {
-      throw new Error("Impossible de charger vos documents.");
+      throw new Error("Unable to load your documents.");
     }
 
     scheduleDocumentsRefresh(renderDocuments(payload.documents));
   } catch (error) {
     if (!(error instanceof SessionExpiredError)) {
-      showAlert(error instanceof Error ? error.message : "Chargement impossible.");
+      showAlert(error instanceof Error ? error.message : "Unable to load data.");
     }
   }
 }
@@ -304,22 +304,22 @@ function displayRequestState(payload) {
   const presentation = STATE_PRESENTATION[payload.state];
   elements.requestState.textContent = presentation
     ? presentation.title
-    : "État inconnu";
+    : "Unknown status";
   const message = presentation
     ? presentation.message
-    : "État mis à jour.";
+    : "Status updated.";
   const metadata = [];
 
   if (payload.state === "SIGNED") {
     if (payload.filename) metadata.push(String(payload.filename));
-    if (payload.signer_name) metadata.push(`Signataire : ${payload.signer_name}`);
-    if (payload.signed_at) metadata.push(`Date de signature : ${formatDate(payload.signed_at)}`);
-    if (payload.signature_id) metadata.push(`Signature : ${payload.signature_id}`);
+    if (payload.signer_name) metadata.push(`Signer: ${payload.signer_name}`);
+    if (payload.signed_at) metadata.push(`Signing date: ${formatDate(payload.signed_at)}`);
+    if (payload.signature_id) metadata.push(`Signature: ${payload.signature_id}`);
     if (payload.algorithm) metadata.push(String(payload.algorithm));
-    if (payload.pades_profile) metadata.push(`Profil : ${payload.pades_profile}`);
-    if (payload.certificate_subject) metadata.push(`Certificat : ${payload.certificate_subject}`);
-    if (payload.timestamp_time) metadata.push(`Horodatage : ${formatDate(payload.timestamp_time)}`);
-    if (payload.tsa_certificate_subject) metadata.push(`TSA : ${payload.tsa_certificate_subject}`);
+    if (payload.pades_profile) metadata.push(`Profile: ${payload.pades_profile}`);
+    if (payload.certificate_subject) metadata.push(`Certificate: ${payload.certificate_subject}`);
+    if (payload.timestamp_time) metadata.push(`Timestamp: ${formatDate(payload.timestamp_time)}`);
+    if (payload.tsa_certificate_subject) metadata.push(`TSA: ${payload.tsa_certificate_subject}`);
   }
 
   elements.requestMessage.textContent = metadata.length
@@ -330,10 +330,10 @@ function displayRequestState(payload) {
 function displayConsentAccepted() {
   elements.consentForm.hidden = true;
   elements.requestStatus.hidden = false;
-  elements.requestState.textContent = "Authentification forte requise";
+  elements.requestState.textContent = "Strong authentication required";
   elements.requestMessage.textContent = (
-    "Votre demande de signature a été enregistrée.\n"
-    + "Authentifiez-vous maintenant sur votre terminal ESP32."
+    "Your signature request has been recorded.\n"
+    + "Authenticate now on your ESP32 device."
   );
 }
 
@@ -349,7 +349,7 @@ async function pollRequest(requestId) {
     const payload = await readJson(response);
 
     if (!response.ok || !payload || typeof payload.state !== "string") {
-      throw new Error("Impossible de suivre la demande.");
+      throw new Error("Unable to track the request.");
     }
 
     displayRequestState(payload);
@@ -373,7 +373,7 @@ async function pollRequest(requestId) {
     schedulePoll(requestId);
   } catch (error) {
     if (!(error instanceof SessionExpiredError)) {
-      showAlert(error instanceof Error ? error.message : "Suivi impossible.");
+      showAlert(error instanceof Error ? error.message : "Unable to track the request.");
       schedulePoll(requestId);
     }
   }
@@ -385,7 +385,7 @@ async function requestSignature(event) {
   if (!selectedDocument) return;
 
   if (!elements.documentViewed.checked || !elements.signatureConfirmed.checked) {
-    showAlert("Les deux confirmations sont obligatoires.");
+    showAlert("Both confirmations are required.");
     return;
   }
 
@@ -407,7 +407,7 @@ async function requestSignature(event) {
     if (!response.ok || !payload || typeof payload.request_id !== "string") {
       const detail = payload && typeof payload.detail === "string"
         ? payload.detail
-        : "La demande a été refusée.";
+        : "The request was denied.";
       throw new Error(detail);
     }
 
@@ -416,7 +416,7 @@ async function requestSignature(event) {
     schedulePoll(payload.request_id);
   } catch (error) {
     if (!(error instanceof SessionExpiredError)) {
-      showAlert(error instanceof Error ? error.message : "Demande impossible.");
+      showAlert(error instanceof Error ? error.message : "Unable to submit the request.");
       elements.requestButton.disabled = false;
     }
   }
@@ -428,12 +428,12 @@ async function logout(event) {
 
   try {
     const response = await apiFetch("/user/logout", { method: "POST" });
-    if (!response.ok) throw new Error("Déconnexion impossible.");
+    if (!response.ok) throw new Error("Unable to sign out.");
     csrfToken = "";
     window.location.replace("/user/login");
   } catch (error) {
     if (!(error instanceof SessionExpiredError)) {
-      showAlert(error instanceof Error ? error.message : "Déconnexion impossible.");
+      showAlert(error instanceof Error ? error.message : "Unable to sign out.");
       elements.logoutButton.disabled = false;
     }
   }

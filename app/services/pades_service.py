@@ -717,13 +717,13 @@ class PAdESService:
                     timestamper=timestamper,
                     stamp_style=stamp.TextStampStyle(
                         stamp_text=(
-                            "SIGNÉ ÉLECTRONIQUEMENT\n"
+                            "ELECTRONICALLY SIGNED\n"
                             "RemoteSignLab\n"
-                            "Signataire : %(remotesign_signer)s\n"
-                            "Certificat : %(remotesign_certificate)s\n"
-                            "Profil : %(remotesign_profile)s\n"
-                            "Date : %(remotesign_date)s\n"
-                            "Signature ID : %(remotesign_signature_id)s"
+                            "Signer: %(remotesign_signer)s\n"
+                            "Certificate: %(remotesign_certificate)s\n"
+                            "Profile: %(remotesign_profile)s\n"
+                            "Date: %(remotesign_date)s\n"
+                            "Signature ID: %(remotesign_signature_id)s"
                         ),
                     ),
                     new_field_spec=field_spec,

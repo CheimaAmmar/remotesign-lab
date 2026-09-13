@@ -1594,7 +1594,7 @@ class PAdESMigrationTests(unittest.TestCase):
             PROJECT_ROOT / "app/user_web/static/app.js"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("Télécharger le PDF signé", javascript)
+        self.assertIn("Download signed PDF", javascript)
         self.assertIn(
             "item.request.signed_document_available === true",
             javascript,
@@ -1641,9 +1641,9 @@ class PAdESMigrationTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         for javascript in (user_javascript, admin_javascript):
-            self.assertIn("Signataire :", javascript)
-            self.assertIn("Horodatage :", javascript)
-            self.assertIn("TSA :", javascript)
+            self.assertIn("Signer:", javascript)
+            self.assertIn("Timestamp:", javascript)
+            self.assertIn("TSA:", javascript)
 
 
 if __name__ == "__main__":

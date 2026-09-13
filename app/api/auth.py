@@ -77,7 +77,7 @@ def reject_complete(
     terminal_queue_failure: bool = False,
 ) -> None:
 
-    # Libère notamment un éventuel FOR UPDATE.
+    # This also releases any FOR UPDATE lock.
     database.rollback()
 
     if terminal_queue_failure and isinstance(
@@ -144,7 +144,7 @@ def create_challenge(
     )
 
     # ==================================================
-    # NORMALISATION
+    # NORMALIZATION
     # ==================================================
 
     device_uid = (
@@ -174,8 +174,8 @@ def create_challenge(
     # ==================================================
     # DEVICE
     #
-    # IMPORTANT :
-    # device doit exister AVANT tout device.id
+    # IMPORTANT:
+    # device must exist BEFORE any use of device.id
     # ==================================================
 
     device = database.scalar(
@@ -390,7 +390,7 @@ def create_challenge(
     # ==================================================
     # HMAC
     #
-    # Canonical :
+    # Canonical:
     #
     # POST
     # /api/v1/auth/challenge
@@ -438,7 +438,7 @@ def create_challenge(
         )
 
     # ==================================================
-    # DOCUMENT POSTGRESQL
+    # POSTGRESQL DOCUMENT
     # ==================================================
 
     document = database.get(
@@ -631,8 +631,8 @@ def create_challenge(
         auth_session
     )
 
-    # Génère notamment auth_session.id
-    # avant l'événement d'audit.
+    # This generates auth_session.id, among other values,
+    # before the audit event.
     database.flush()
 
     signature_request = try_attach_authentication_session(
@@ -681,7 +681,7 @@ def create_challenge(
     )
 
     # ==================================================
-    # REPONSE
+    # RESPONSE
     # ==================================================
 
     return {
@@ -737,7 +737,7 @@ def complete_authentication(
 ) -> dict:
 
     # ==================================================
-    # NORMALISATION
+    # NORMALIZATION
     # ==================================================
 
     device_uid = (
@@ -994,7 +994,7 @@ def complete_authentication(
         )
 
     # ==================================================
-    # SESSION + VERROU POSTGRESQL
+    # SESSION + POSTGRESQL LOCK
     # ==================================================
 
     auth_session = database.scalar(
@@ -1009,7 +1009,7 @@ def complete_authentication(
     )
 
     # ==================================================
-    # SESSION INEXISTANTE
+    # MISSING SESSION
     # ==================================================
 
     if auth_session is None:
@@ -1024,7 +1024,7 @@ def complete_authentication(
         )
 
     # ==================================================
-    # DEVICE DE LA SESSION
+    # SESSION DEVICE
     # ==================================================
 
     if auth_session.device_id != device.id:
@@ -1065,7 +1065,7 @@ def complete_authentication(
         )
 
     # ==================================================
-    # SESSION DEJA VERIFIEE
+    # SESSION ALREADY VERIFIED
     # ==================================================
 
     if auth_session.verified_at is not None:
@@ -1173,7 +1173,7 @@ def complete_authentication(
         )
 
     # ==================================================
-    # DOCUMENT POSTGRESQL
+    # POSTGRESQL DOCUMENT
     # ==================================================
 
     document = database.get(
@@ -1286,7 +1286,7 @@ def complete_authentication(
         )
 
     # ==================================================
-    # USER DE LA DEMANDE WEB
+    # USER FROM THE WEB REQUEST
     # ==================================================
 
     if not signature_request_is_authorized_for_session(
@@ -1336,7 +1336,7 @@ def complete_authentication(
         )
 
     # ==================================================
-    # AUTHENTIFICATION FORTE VALIDEE
+    # STRONG AUTHENTICATION VALIDATED
     # ==================================================
 
     auth_session.verified_at = now
@@ -1371,7 +1371,7 @@ def complete_authentication(
     database.commit()
 
     # ==================================================
-    # REPONSE
+    # RESPONSE
     # ==================================================
 
     return {

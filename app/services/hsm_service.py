@@ -9,7 +9,7 @@ from app.config import get_settings
 
 
 class HSMServiceError(RuntimeError):
-    """Erreur contrôlée lors d'une opération avec le HSM."""
+    """Controlled error during an HSM operation."""
 
 
 @dataclass(frozen=True)
@@ -35,7 +35,7 @@ class HSMService:
 
         except PKCS11Error as error:
             raise HSMServiceError(
-                "Impossible de charger le module ou le token PKCS#11"
+                "Unable to load the PKCS#11 module or token"
             ) from error
 
     def sign_sha256_rsa_pkcs1(
@@ -61,7 +61,7 @@ class HSMService:
 
         except PKCS11Error as error:
             raise HSMServiceError(
-                "La signature PKCS#11 a échoué"
+                "PKCS#11 signing failed"
             ) from error
 
         return SignatureResult(
@@ -79,7 +79,7 @@ class HSMService:
 
         if len(digest) != 32:
             raise HSMServiceError(
-                "Le digest SHA-256 doit faire exactement 32 octets"
+                "The SHA-256 digest must be exactly 32 bytes"
             )
 
         sha256_digest_info_prefix = bytes.fromhex(
@@ -121,7 +121,7 @@ class HSMService:
         except PKCS11Error as error:
 
             raise HSMServiceError(
-                "La signature du digest SHA-256 a échoué"
+                "Signing the SHA-256 digest failed"
             ) from error
 
         return SignatureResult(
@@ -156,7 +156,7 @@ class HSMService:
 
         except PKCS11Error as error:
             raise HSMServiceError(
-                "Impossible de lire la clé publique PKCS#11"
+                "Unable to read the PKCS#11 public key"
             ) from error
 
         from cryptography.hazmat.primitives import serialization

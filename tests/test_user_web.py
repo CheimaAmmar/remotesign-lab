@@ -1058,17 +1058,17 @@ class UserSignatureStatePresentationTests(unittest.TestCase):
         )
         self.assertNotIn("/api/v1/auth", request_signature)
         self.assertNotIn("/api/v1/sign", request_signature)
-        self.assertIn('sign.textContent = "Signer ce document"', source)
+        self.assertIn('sign.textContent = "Sign this document"', source)
         self.assertIn(
-            'elements.requestState.textContent = "Authentification forte requise"',
+            'elements.requestState.textContent = "Strong authentication required"',
             source,
         )
         self.assertIn(
-            "Votre demande de signature a été enregistrée.",
+            "Your signature request has been recorded.",
             source,
         )
         self.assertIn(
-            "Authentifiez-vous maintenant sur votre terminal ESP32.",
+            "Authenticate now on your ESP32 device.",
             source,
         )
 
@@ -1094,7 +1094,7 @@ class UserSignatureStatePresentationTests(unittest.TestCase):
         self.assertIn("elements.documentViewed.checked = false", source)
         self.assertIn("schedulePoll(requestId)", source)
         self.assertEqual(
-            source.count('title: "Document signé avec succès"'),
+            source.count('title: "Document signed successfully"'),
             1,
         )
 
@@ -1104,16 +1104,16 @@ class UserSignatureStatePresentationTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn(
-            'title: "En attente de votre authentification forte"',
+            'title: "Waiting for your strong authentication"',
             source,
         )
         self.assertIn(
-            'message: "Authentifiez-vous sur le terminal ESP32."',
+            'message: "Authenticate on the ESP32 device."',
             source,
         )
 
     def test_only_signed_uses_the_success_message(self) -> None:
-        success_message = "Document signé avec succès."
+        success_message = "Document signed successfully."
 
         for request_status, message in (
             USER_SIGNATURE_REQUEST_MESSAGES.items()
@@ -1128,13 +1128,13 @@ class UserSignatureStatePresentationTests(unittest.TestCase):
             USER_SIGNATURE_REQUEST_MESSAGES[
                 SignatureRequestStatus.PENDING
             ],
-            "Authentifiez-vous sur le terminal ESP32.",
+            "Authenticate on the ESP32 device.",
         )
         self.assertEqual(
             USER_SIGNATURE_REQUEST_MESSAGES[
                 SignatureRequestStatus.AUTHENTICATED
             ],
-            "Signature cryptographique en cours.",
+            "Cryptographic signing in progress.",
         )
 
     def test_signed_response_contains_available_signature_metadata(
@@ -1150,16 +1150,16 @@ class UserSignatureStatePresentationTests(unittest.TestCase):
                 signature_id=signature_id,
                 completed_at=signed_at,
             ),
-            document=SimpleNamespace(original_filename="contrat.pdf"),
+            document=SimpleNamespace(original_filename="contract.pdf"),
             signature=SimpleNamespace(algorithm="RSA-PKCS1-SHA256"),
         )
 
         self.assertEqual(response["state"], "SIGNED")
         self.assertEqual(
             response["message"],
-            "Document signé avec succès.",
+            "Document signed successfully.",
         )
-        self.assertEqual(response["filename"], "contrat.pdf")
+        self.assertEqual(response["filename"], "contract.pdf")
         self.assertEqual(response["signed_at"], signed_at.isoformat())
         self.assertEqual(response["signature_id"], str(signature_id))
         self.assertEqual(response["algorithm"], "RSA-PKCS1-SHA256")

@@ -1,48 +1,48 @@
-# Signature PDF PAdES dans RemoteSignLab
+# PAdES PDF signatures in RemoteSignLab
 
-RemoteSignLab produit un PDF signé séparé sous `storage/signed/`. Le PDF original
-de `storage/documents/` n'est jamais remplacé. La publication suit l'ordre
-suivant : fichier temporaire, génération pyHanko, validation, renommage
-atomique, écriture de `DocumentSignature`, transition de la demande vers
-`SIGNED`, puis commit PostgreSQL.
+RemoteSignLab produces a separate signed PDF under `storage/signed/`. The
+original PDF in `storage/documents/` is never replaced. Publication follows
+this order: temporary file, pyHanko generation, validation, atomic rename,
+`DocumentSignature` write, request transition to `SIGNED`, then PostgreSQL
+commit.
 
-## Profils disponibles
+## Available profiles
 
-- `PAdES-B-B` contient la signature CMS de base et le certificat du signataire.
-- `PAdES-B-T` ajoute un jeton d'horodatage de signature RFC 3161 signé par une
-  TSA distincte.
+- `PAdES-B-B` contains the basic CMS signature and the signer's certificate.
+- `PAdES-B-T` adds an RFC 3161 signature timestamp token signed by a separate
+  TSA.
 
-Le profil se choisit avec `PADES_PROFILE`. En mode `PAdES-B-T`, `TSA_URL` et
-`TSA_CA_CERTIFICATE` sont obligatoires. Une indisponibilité ou une réponse TSA
-invalide fait échouer la signature ; RemoteSignLab ne revient jamais implicitement
-à B-B.
+Select the profile with `PADES_PROFILE`. In `PAdES-B-T` mode, `TSA_URL`
+and `TSA_CA_CERTIFICATE` are required. An unavailable TSA or an invalid TSA
+response causes the signature to fail; RemoteSignLab never falls back
+implicitly to B-B.
 
-L'apparence visible est créée sur la dernière page avant le calcul du
-`ByteRange`. Sa boîte est calculée dans la `CropBox`, ou la `MediaBox` si
-nécessaire, avec une marge et une réduction pour les petites pages. Le texte
-reprend le nom du `User` relu côté serveur, le vrai certificat X.509, le profil,
-la date serveur et l'identifiant de signature.
+The visible appearance is created on the last page before calculating the
+`ByteRange`. Its box is computed within the `CropBox`, or the `MediaBox`
+when necessary, with a margin and a size reduction for small pages. The text
+uses the `User` name read again on the server, the actual X.509 certificate,
+the profile, the server date, and the signature identifier.
 
-## Trois certificats, trois usages
+## Three certificates, three purposes
 
-- Le certificat TLS protège la connexion HTTPS FastAPI.
-- `RemoteSignLab Development Signer` certifie la clé de signature de document dont
-  la clé privée reste dans SoftHSM.
-- `RemoteSignLab Development TSA` signe les jetons RFC 3161 avec une autre clé.
+- The TLS certificate protects the FastAPI HTTPS connection.
+- `RemoteSignLab Development Signer` certifies the document-signing key whose
+  private key remains in SoftHSM.
+- `RemoteSignLab Development TSA` signs RFC 3161 tokens with a different key.
 
-Ces identités ne sont jamais interchangeables. Le certificat de signataire et
-la chaîne TSA sont publics ; les clés privées de CA/TSA et le PIN SoftHSM ne
-doivent pas être placés dans Git.
+These identities are never interchangeable. The signer certificate and TSA
+chain are public; CA/TSA private keys and the SoftHSM PIN must not be stored in
+Git.
 
 ## Validation
 
-Le endpoint ADMIN `GET /api/v1/signatures/{signature_id}/verify` contrôle la
-signature détachée historique, puis, si un PDF PAdES existe, son intégrité, sa
-couverture complète, le certificat signataire et son ancre de confiance. Pour
-B-T, il exige en plus un timestamp présent, cryptographiquement valide et
-fiable selon `TSA_CA_CERTIFICATE`.
+The ADMIN endpoint `GET /api/v1/signatures/{signature_id}/verify` checks the
+historical detached signature and, when a PAdES PDF exists, its integrity, full
+coverage, signer certificate, and trust anchor. For B-T, it also requires a
+present, cryptographically valid timestamp trusted according to
+`TSA_CA_CERTIFICATE`.
 
-Validation CLI B-B :
+B-B CLI validation:
 
 ```bash
 .venv/bin/pyhanko sign validate \
@@ -52,7 +52,7 @@ Validation CLI B-B :
   storage/signed/<document-id>-<signature-id>.pdf
 ```
 
-Validation CLI B-T avec les deux ancres de développement :
+B-T CLI validation with both development trust anchors:
 
 ```bash
 .venv/bin/pyhanko sign validate \
@@ -63,15 +63,15 @@ Validation CLI B-T avec les deux ancres de développement :
   storage/signed/<document-id>-<signature-id>.pdf
 ```
 
-Le propriétaire connecté télécharge le fichier validé par
-`GET /user/documents/{document_id}/signed`. Le chemin disque n'est jamais pris
-depuis le navigateur.
+The signed-in owner downloads the validated file through
+`GET /user/documents/{document_id}/signed`. The disk path is never supplied
+by the browser.
 
-## Portée et limites
+## Scope and limitations
 
-Cette infrastructure utilise des certificats privés de développement. Elle ne
-constitue pas une signature électronique qualifiée et ne modifie aucun trust
-store système. PAdES-B-T prouve une heure par RFC 3161, mais ne fournit pas les
-données de révocation embarquées et la maintenance requises par PAdES-B-LT ou
-PAdES-B-LTA. Les étapes suivantes seront l'intégration OCSP/CRL, un DSS, puis
-une chaîne de timestamps d'archivage.
+This infrastructure uses private development certificates. It does not
+constitute a qualified electronic signature and does not modify any system
+trust store. PAdES-B-T proves a time through RFC 3161, but does not provide the
+embedded revocation data and maintenance required by PAdES-B-LT or PAdES-B-LTA.
+The next steps would be OCSP/CRL integration, a DSS, and then an archival
+timestamp chain.

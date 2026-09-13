@@ -4,13 +4,13 @@ const feedback = document.getElementById("login-feedback");
 const errorCode = new URLSearchParams(window.location.search).get("error");
 
 const messages = {
-  invalid: "Adresse e-mail ou mot de passe incorrect.",
-  expired: "Votre session a expiré. Veuillez vous reconnecter.",
-  session_expired: "Votre session a expiré. Veuillez vous reconnecter.",
-  required: "Une connexion utilisateur est nécessaire.",
+  invalid: "Incorrect email address or password.",
+  expired: "Your session has expired. Please sign in again.",
+  session_expired: "Your session has expired. Please sign in again.",
+  required: "User sign-in is required.",
 };
 
 if (errorCode && feedback) {
-  feedback.textContent = messages[errorCode] || "La connexion a échoué.";
+  feedback.textContent = messages[errorCode] || "Sign-in failed.";
   feedback.hidden = false;
 }

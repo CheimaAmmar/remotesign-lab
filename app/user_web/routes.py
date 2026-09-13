@@ -74,23 +74,23 @@ CONSENT_VERSION = "remotesign-lab-consent-v1"
 
 USER_SIGNATURE_REQUEST_MESSAGES = {
     SignatureRequestStatus.PENDING: (
-        "Authentifiez-vous sur le terminal ESP32."
+        "Authenticate on the ESP32 device."
     ),
     SignatureRequestStatus.CLAIMED: (
-        "Terminal connecté."
+        "Device connected."
     ),
     SignatureRequestStatus.AUTHENTICATING: (
-        "Authentification en cours."
+        "Authentication in progress."
     ),
     SignatureRequestStatus.AUTHENTICATED: (
-        "Signature cryptographique en cours."
+        "Cryptographic signing in progress."
     ),
     SignatureRequestStatus.SIGNED: (
-        "Document signé avec succès."
+        "Document signed successfully."
     ),
-    SignatureRequestStatus.FAILED: "Signature refusée.",
+    SignatureRequestStatus.FAILED: "Signature denied.",
     SignatureRequestStatus.EXPIRED: (
-        "Demande expirée."
+        "Request expired."
     ),
 }
 

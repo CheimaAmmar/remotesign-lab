@@ -13,16 +13,16 @@ from sqlalchemy.orm import Session
 from app.models import UsedNonce
 
 
-# Durée pendant laquelle le timestamp/HMAC
-# considère normalement la requête comme récente.
+# Period during which timestamp/HMAC validation normally
+# considers the request recent.
 NONCE_TTL_SECONDS = 120
 
-# Conservation supplémentaire en base avant nettoyage.
+# Additional database retention before cleanup.
 NONCE_RETENTION_SECONDS = 600
 
 
 # ======================================================
-# NETTOYAGE DES ANCIENS NONCES
+# OLD NONCE CLEANUP
 # ======================================================
 
 def cleanup_old_nonces(
@@ -51,7 +51,7 @@ def cleanup_old_nonces(
 
 
 # ======================================================
-# CONSOMMATION ATOMIQUE DU NONCE
+# ATOMIC NONCE CONSUMPTION
 # ======================================================
 
 def consume_nonce(
@@ -60,22 +60,21 @@ def consume_nonce(
     nonce: str,
 ) -> bool:
     """
-    Consomme un nonce de manière atomique.
+    Consume a nonce atomically.
 
-    Retour :
-        True  -> nonce accepté
-        False -> nonce invalide ou déjà utilisé
+    Returns:
+        True  -> nonce accepted
+        False -> nonce invalid or already used
 
-    La contrainte PostgreSQL :
+    The PostgreSQL constraint:
 
         UNIQUE(device_id, nonce)
 
-    protège contre deux utilisations concurrentes
-    du même nonce.
+    prevents two concurrent uses of the same nonce.
     """
 
     # ==================================================
-    # NORMALISATION
+    # NORMALIZATION
     # ==================================================
 
     normalized_nonce = (
@@ -87,9 +86,9 @@ def consume_nonce(
     # ==================================================
     # FORMAT
     #
-    # Firmware :
-    # 16 octets aléatoires
-    # = 32 caractères hexadécimaux
+    # Firmware:
+    # 16 random bytes
+    # = 32 hexadecimal characters
     # ==================================================
 
     if not re.fullmatch(
@@ -99,7 +98,7 @@ def consume_nonce(
         return False
 
     # ==================================================
-    # NETTOYAGE
+    # CLEANUP
     # ==================================================
 
     cleanup_old_nonces(
@@ -128,15 +127,15 @@ def consume_nonce(
     )
 
     # ==================================================
-    # INSERTION ATOMIQUE
+    # ATOMIC INSERT
     # ==================================================
 
     try:
 
         # SAVEPOINT SQLAlchemy/PostgreSQL.
         #
-        # Si UNIQUE(device_id, nonce) échoue,
-        # seule cette sous-transaction est annulée.
+        # If UNIQUE(device_id, nonce) fails,
+        # only this nested transaction is rolled back.
 
         with database.begin_nested():
 

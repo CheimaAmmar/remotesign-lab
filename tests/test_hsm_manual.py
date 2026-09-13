@@ -8,17 +8,17 @@ from app.services.hsm_service import HSMService
 
 
 def main() -> None:
-    data = b"Document de test signe depuis Python"
+    data = b"Test document signed from Python"
 
     hsm = HSMService()
 
     result = hsm.sign_sha256_rsa_pkcs1(data)
 
-    print("Algorithme :", result.algorithm)
-    print("Label clé  :", result.key_label)
-    print("Taille     :", len(result.signature), "octets")
+    print("Algorithm:", result.algorithm)
+    print("Key label:", result.key_label)
+    print("Size:", len(result.signature), "bytes")
     print(
-        "Signature  :",
+        "Signature:",
         result.signature_base64[:80] + "...",
     )
 
@@ -36,26 +36,25 @@ def main() -> None:
             hashes.SHA256(),
         )
 
-        print("Vérification : OK")
+        print("Verification: OK")
 
     except InvalidSignature:
-        print("Vérification : ÉCHEC")
+        print("Verification: FAILED")
         raise SystemExit(1)
 
     try:
         public_key.verify(
             result.signature,
-            b"Document modifie",
+            b"Modified document",
             padding.PKCS1v15(),
             hashes.SHA256(),
         )
 
     except InvalidSignature:
         print(
-            "Test modification : signature correctement rejetée"
+            "Modification test: signature correctly rejected"
         )
 
 
 if __name__ == "__main__":
     main()
-
