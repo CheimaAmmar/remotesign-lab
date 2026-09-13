@@ -2,7 +2,7 @@
 default_tsa = tsa_config
 
 [ tsa_config ]
-dir = $ENV::STAGE_HSM_TSA_DIR
+dir = $ENV::REMOTESIGN_LAB_TSA_DIR
 serial = $dir/tsaserial
 crypto_device = builtin
 signer_cert = $dir/tsa.crt

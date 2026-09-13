@@ -294,6 +294,10 @@ class PasswordAndLoginTests(unittest.TestCase):
         cookie.load(response.headers["set-cookie"])
         morsel = cookie[USER_SESSION_COOKIE_NAME]
 
+        self.assertEqual(
+            USER_SESSION_COOKIE_NAME,
+            "remotesign_lab_user_session",
+        )
         self.assertEqual(morsel["path"], "/user")
         self.assertEqual(morsel["samesite"], "strict")
         self.assertTrue(morsel["secure"])
@@ -302,7 +306,7 @@ class PasswordAndLoginTests(unittest.TestCase):
         self.assertEqual(get_user_session(morsel.value).user_id, user.id)
         self.assertNotEqual(
             USER_SESSION_COOKIE_NAME,
-            "stage_hsm_ui_session",
+            "remotesign_lab_ui_session",
         )
 
         material = response.headers["set-cookie"] + response.body.decode()
@@ -614,10 +618,10 @@ class UserDocumentIsolationTests(unittest.TestCase):
             signed_document_path="signed.pdf",
             signing_time=signed_at,
             pades_profile="PAdES-B-T",
-            certificate_subject="CN=Stage-HSM Development Signer",
+            certificate_subject="CN=RemoteSignLab Development Signer",
             timestamp_time=signed_at,
             tsa_certificate_subject=(
-                "CN=Stage-HSM Development TSA"
+                "CN=RemoteSignLab Development TSA"
             ),
         )
         database = OwnedDocumentsDatabase(
@@ -650,7 +654,7 @@ class UserDocumentIsolationTests(unittest.TestCase):
         self.assertEqual(payload["timestamp_time"], signed_at.isoformat())
         self.assertEqual(
             payload["tsa_certificate_subject"],
-            "CN=Stage-HSM Development TSA",
+            "CN=RemoteSignLab Development TSA",
         )
 
     def test_document_view_is_scoped_and_recorded_server_side(self) -> None:
@@ -825,6 +829,10 @@ class UserSignatureRequestTests(unittest.TestCase):
         self.assertEqual(
             signature_request.consent_version,
             CONSENT_VERSION,
+        )
+        self.assertEqual(
+            CONSENT_VERSION,
+            "remotesign-lab-consent-v1",
         )
         audit_event_types = {
             record.event_type
@@ -1211,6 +1219,14 @@ class UserWebSecurityContractTests(unittest.TestCase):
             for marker in forbidden:
                 with self.subTest(asset=asset.name, marker=marker):
                     self.assertNotIn(marker, content)
+
+        templates = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in USER_ASSETS[:2]
+        )
+        self.assertIn("RemoteSignLab", templates)
+        self.assertIn(">RL<", templates)
+        self.assertNotIn("Stage-HSM", templates)
 
 
 if __name__ == "__main__":

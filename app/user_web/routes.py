@@ -70,7 +70,7 @@ from app.services.signature_request_service import (
 USER_WEB_ROOT = Path(__file__).resolve().parent
 USER_WEB_TEMPLATES = USER_WEB_ROOT / "templates"
 USER_WEB_STATIC = USER_WEB_ROOT / "static"
-CONSENT_VERSION = "stage-hsm-consent-v1"
+CONSENT_VERSION = "remotesign-lab-consent-v1"
 
 USER_SIGNATURE_REQUEST_MESSAGES = {
     SignatureRequestStatus.PENDING: (

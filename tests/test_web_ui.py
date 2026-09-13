@@ -282,6 +282,10 @@ class WebSessionSecurityTests(unittest.TestCase):
         cookie.load(set_cookie)
         morsel = cookie[UI_SESSION_COOKIE_NAME]
 
+        self.assertEqual(
+            UI_SESSION_COOKIE_NAME,
+            "remotesign_lab_ui_session",
+        )
         self.assertEqual(morsel["path"], "/ui")
         self.assertEqual(morsel["samesite"], "strict")
         self.assertTrue(morsel["secure"])
@@ -408,6 +412,14 @@ class WebAssetTests(unittest.TestCase):
         for queue_state in SignatureRequestStatus:
             self.assertIn(queue_state.value, javascript)
 
+        templates = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in WEB_ASSETS[:2]
+        )
+        self.assertIn("RemoteSignLab", templates)
+        self.assertIn(">RL<", templates)
+        self.assertNotIn("Stage-HSM", templates)
+
     def test_admin_interface_has_no_signature_request_action(
         self,
     ) -> None:
@@ -502,7 +514,7 @@ class WebAssetTests(unittest.TestCase):
 
 class DocumentServiceTests(unittest.TestCase):
     def test_pdf_is_stored_and_hashed_without_a_real_database(self) -> None:
-        pdf = b"%PDF-1.7\nprototype Stage-HSM\n%%EOF\n"
+        pdf = b"%PDF-1.7\nprototype RemoteSignLab\n%%EOF\n"
         database = FakeDocumentDatabase()
         upload = UploadFile(
             file=BytesIO(pdf),
@@ -589,10 +601,10 @@ class SignatureRequestTests(unittest.TestCase):
             created_at=signed_at,
             signing_time=signed_at,
             pades_profile="PAdES-B-T",
-            certificate_subject="CN=Stage-HSM Development Signer",
+            certificate_subject="CN=RemoteSignLab Development Signer",
             timestamp_time=signed_at,
             tsa_certificate_subject=(
-                "CN=Stage-HSM Development TSA"
+                "CN=RemoteSignLab Development TSA"
             ),
         )
 
@@ -649,7 +661,7 @@ class SignatureRequestTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     payload["certificate_subject"],
-                    "CN=Stage-HSM Development Signer",
+                    "CN=RemoteSignLab Development Signer",
                 )
                 self.assertEqual(
                     payload["signer_name"],
@@ -661,7 +673,7 @@ class SignatureRequestTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     payload["tsa_certificate_subject"],
-                    "CN=Stage-HSM Development TSA",
+                    "CN=RemoteSignLab Development TSA",
                 )
             else:
                 self.assertNotIn("signature_id", payload)

@@ -1,1 +1,1 @@
-"""User-facing Web interface for the Stage-HSM prototype."""
+"""User-facing Web interface for the RemoteSignLab prototype."""

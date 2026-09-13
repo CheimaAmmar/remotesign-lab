@@ -1,6 +1,6 @@
-# Signature PDF PAdES dans Stage-HSM
+# Signature PDF PAdES dans RemoteSignLab
 
-Stage-HSM produit un PDF signé séparé sous `storage/signed/`. Le PDF original
+RemoteSignLab produit un PDF signé séparé sous `storage/signed/`. Le PDF original
 de `storage/documents/` n'est jamais remplacé. La publication suit l'ordre
 suivant : fichier temporaire, génération pyHanko, validation, renommage
 atomique, écriture de `DocumentSignature`, transition de la demande vers
@@ -14,7 +14,7 @@ atomique, écriture de `DocumentSignature`, transition de la demande vers
 
 Le profil se choisit avec `PADES_PROFILE`. En mode `PAdES-B-T`, `TSA_URL` et
 `TSA_CA_CERTIFICATE` sont obligatoires. Une indisponibilité ou une réponse TSA
-invalide fait échouer la signature ; Stage-HSM ne revient jamais implicitement
+invalide fait échouer la signature ; RemoteSignLab ne revient jamais implicitement
 à B-B.
 
 L'apparence visible est créée sur la dernière page avant le calcul du
@@ -26,9 +26,9 @@ la date serveur et l'identifiant de signature.
 ## Trois certificats, trois usages
 
 - Le certificat TLS protège la connexion HTTPS FastAPI.
-- `Stage-HSM Development Signer` certifie la clé de signature de document dont
+- `RemoteSignLab Development Signer` certifie la clé de signature de document dont
   la clé privée reste dans SoftHSM.
-- `Stage-HSM Development TSA` signe les jetons RFC 3161 avec une autre clé.
+- `RemoteSignLab Development TSA` signe les jetons RFC 3161 avec une autre clé.
 
 Ces identités ne sont jamais interchangeables. Le certificat de signataire et
 la chaîne TSA sont publics ; les clés privées de CA/TSA et le PIN SoftHSM ne
@@ -47,7 +47,7 @@ Validation CLI B-B :
 ```bash
 .venv/bin/pyhanko sign validate \
   --pretty-print \
-  --trust certs/stage-hsm-test-ca.crt \
+  --trust certs/remotesign-lab-test-ca.crt \
   --trust-replace \
   storage/signed/<document-id>-<signature-id>.pdf
 ```
@@ -57,8 +57,8 @@ Validation CLI B-T avec les deux ancres de développement :
 ```bash
 .venv/bin/pyhanko sign validate \
   --pretty-print \
-  --trust certs/stage-hsm-test-ca.crt \
-  --trust certs/stage-hsm-development-tsa-ca.crt \
+  --trust certs/remotesign-lab-test-ca.crt \
+  --trust certs/remotesign-lab-development-tsa-ca.crt \
   --trust-replace \
   storage/signed/<document-id>-<signature-id>.pdf
 ```

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException, Request, status
 
 
-UI_SESSION_COOKIE_NAME = "stage_hsm_ui_session"
+UI_SESSION_COOKIE_NAME = "remotesign_lab_ui_session"
 UI_SESSION_TTL_SECONDS = 30 * 60
 
 # Prototype-local storage: use one application worker.

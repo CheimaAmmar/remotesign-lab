@@ -1,6 +1,6 @@
-# Stage-HSM
+# RemoteSignLab
 
-Stage-HSM is an academic prototype for remote electronic signatures. It
+RemoteSignLab is an academic prototype for remote electronic signatures. It
 combines strong user authentication with a server-side RSA signing key
 protected through PKCS#11 and SoftHSM, and produces verifiable PAdES PDF
 signatures.
@@ -50,7 +50,7 @@ with the TSA supplying the timestamp for PAdES-B-T.
 
 1. The USER opens the assigned document.
 2. The USER records explicit consent.
-3. Stage-HSM creates a signature request.
+3. RemoteSignLab creates a signature request.
 4. The ESP32-C3 retrieves the pending request.
 5. The device checks the RFID card and fingerprint.
 6. The server issues an authentication challenge.
@@ -140,8 +140,8 @@ Firmware credentials and the laboratory trust anchor are local files and are
 not versioned. Create them from the safe templates:
 
 ```bash
-cp firmware/stage_hsm/secrets.example.h firmware/stage_hsm/secrets.h
-cp firmware/stage_hsm/trust_anchor.example.h firmware/stage_hsm/trust_anchor.h
+cp firmware/remotesign_lab/secrets.example.h firmware/remotesign_lab/secrets.h
+cp firmware/remotesign_lab/trust_anchor.example.h firmware/remotesign_lab/trust_anchor.h
 ```
 
 Set local Wi-Fi credentials and `DEVICE_SECRET` only in `secrets.h`. Replace
@@ -192,6 +192,6 @@ Current baseline: **143 tests passing**.
 
 ## Disclaimer
 
-Stage-HSM is an academic and demonstration prototype. Its development
+RemoteSignLab is an academic and demonstration prototype. Its development
 certificates, development TSA, configuration, and trust model must not be used
 as a production PKI or treated as a qualified electronic-signature service.
