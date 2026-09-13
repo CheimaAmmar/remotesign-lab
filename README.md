@@ -1,76 +1,94 @@
 # RemoteSignLab
 
-RemoteSignLab is an academic prototype for secure remote electronic signatures.
+RemoteSignLab is an academic prototype for **secure remote electronic signatures** combining a hardware authentication terminal, a FastAPI backend, PKCS#11-based key protection, PAdES PDF signatures, RFC 3161 timestamps, and tamper-evident security auditing.
 
-It combines strong user authentication on an ESP32-C3 hardware terminal with a server-side RSA signing key protected through PKCS#11 and SoftHSM. The platform produces verifiable PAdES PDF signatures and includes a complete audit trail for traceability.
+The system uses an **ESP32-C3 terminal with RFID and fingerprint authentication** to authorize signing requests, while the RSA signing key remains protected on the server side through **SoftHSM2 and PKCS#11**.
 
-The prototype also includes a custom PCB designed with KiCad and manufactured using a laser-assisted resist process with an Emblaser 2 followed by chemical etching.
+The project also includes a custom PCB designed with KiCad and manufactured locally using an **Emblaser 2 laser-assisted resist process followed by chemical etching**.
 
 ---
 
-## Features
+## Project Highlights
 
-- FastAPI backend
-- PostgreSQL database
-- ESP32-C3 authentication terminal
-- RFID authentication with MFRC522
-- Fingerprint authentication with DY50
-- SSD1306 OLED display
-- HMAC-SHA256 device authentication
-- Timestamp and nonce anti-replay protection
-- Persistent nonce protection
-- Separate USER and ADMIN interfaces
-- Explicit user consent workflow
-- Signature-request queue
-- SoftHSM2 integration through PKCS#11
-- Server-side RSA signing key protection
-- PAdES-B-B signatures
-- PAdES-B-T signatures
+### Secure remote signing
+
+- PAdES-B-B and PAdES-B-T PDF signatures
+- RSA signing through PKCS#11
+- SoftHSM2-protected signing key
 - RFC 3161 timestamp authority integration
-- Signed PDF verification
-- Security audit trail
-- Tamper-evident SHA-256 audit hash chain
-- PostgreSQL advisory-lock serialization for audit events
-- ADMIN audit interface with filtering and pagination
-- Audit integrity verification
-- CSV audit export
-- Custom KiCad PCB
-- Laser-assisted PCB fabrication
+- Signed PDF integrity and signature verification
+
+### Strong user authentication
+
+- ESP32-C3 authentication terminal
+- MFRC522 RFID reader
+- DY50 fingerprint sensor
+- SSD1306 OLED display
+- Explicit user consent before signature authorization
+
+### Device security
+
+- HMAC-SHA256 authenticated requests
+- Timestamp validation
+- Persistent nonce anti-replay protection
+- Device, document and approval-context binding
+- HTTPS with server certificate validation
+
+### Backend and audit
+
+- FastAPI
+- PostgreSQL
+- Separate USER and ADMIN interfaces
+- Signature-request queue
+- Structured security audit events
+- SHA-256 tamper-evident audit hash chain
+- PostgreSQL advisory-lock serialization
+- ADMIN audit filtering, pagination and CSV export
+- Audit-chain integrity verification
+
+### Hardware development
+
+- Custom KiCad schematic
+- Custom PCB routing
+- ESP32-C3 / RFID / fingerprint / OLED integration
+- Emblaser 2 laser engraving
 - Chemical PCB etching
+- Manual drilling, soldering and testing
 
 ---
 
-## Architecture
+# System Architecture
 
 ```mermaid
 flowchart TD
     User[USER Web Interface] -->|HTTPS| API[FastAPI Backend]
     Admin[ADMIN Web Interface] -->|HTTPS| API
 
-    Device[ESP32-C3 Terminal<br/>RFID + Fingerprint + OLED] -->|HTTPS + HMAC-SHA256| API
+    Device[ESP32-C3 Terminal<br/>RFID + Fingerprint + OLED]
+        -->|HTTPS + HMAC-SHA256| API
 
     API --> DB[(PostgreSQL)]
-    API --> HSM[SoftHSM / PKCS#11]
+    API --> HSM[SoftHSM2 / PKCS#11]
     API --> TSA[RFC 3161 TSA]
 
-    HSM --> PDF[PAdES PDF]
+    HSM --> PDF[PAdES Signed PDF]
     TSA --> PDF
     API --> PDF
 ```
 
-FastAPI coordinates authentication, authorization, consent, document management, signature requests and signature generation.
+The FastAPI backend coordinates authentication, authorization, user consent, document management, signature requests, signing and verification.
 
-PostgreSQL stores users, devices, documents, authentication sessions, nonces, signature requests, signature metadata and security audit events.
+PostgreSQL stores application and workflow data, including users, devices, documents, authentication sessions, nonces, signature requests, signature metadata and security audit events.
 
-The ESP32-C3 authenticates the user locally through RFID and fingerprint verification and authenticates sensitive requests to the backend using HMAC-SHA256.
+The ESP32-C3 terminal performs the local authentication steps and authenticates sensitive requests to the backend using HMAC-SHA256.
 
-The private signing key is never stored on the ESP32-C3. It remains protected on the server side through PKCS#11 and SoftHSM.
+The private RSA signing key is never stored on the ESP32-C3. It remains protected behind the PKCS#11 interface provided by SoftHSM2.
 
-pyHanko generates and validates the resulting PAdES documents, while the RFC 3161 TSA provides the timestamp required for PAdES-B-T.
+pyHanko generates and validates the PAdES signatures. For PAdES-B-T, an RFC 3161 TSA provides the signature timestamp.
 
 ---
 
-## Authentication and Signature Flow
+# End-to-End Signature Flow
 
 1. The USER signs in to the Web interface.
 2. The USER opens an assigned PDF document.
@@ -79,116 +97,126 @@ pyHanko generates and validates the resulting PAdES documents, while the RFC 316
 5. The ESP32-C3 retrieves the pending request.
 6. The terminal verifies the RFID card.
 7. The terminal verifies the fingerprint.
-8. The server issues an authentication challenge.
+8. The backend issues an authentication challenge.
 9. Device requests are authenticated using HMAC-SHA256.
-10. A timestamp and persistent nonce protect requests against replay attacks.
-11. The backend validates the complete authentication context.
+10. Timestamp and persistent nonce checks protect against replay attacks.
+11. The backend validates the device, document, hash and approval context.
 12. The signature request becomes authorized.
-13. SoftHSM performs the RSA signing operation through PKCS#11.
-14. pyHanko creates the PAdES signature.
-15. The RFC 3161 TSA provides a trusted timestamp when PAdES-B-T is enabled.
+13. SoftHSM2 performs the RSA operation through PKCS#11.
+14. pyHanko generates the PAdES signature.
+15. The RFC 3161 TSA provides a timestamp for PAdES-B-T.
 16. The signed PDF becomes available to the USER.
-17. The complete workflow is recorded in the security audit trail.
+17. Security-sensitive operations are recorded in the audit trail.
 
-No credential, device secret, PIN or private key is stored in this README or committed to the repository.
+No credential, device secret, HSM PIN or private key is stored in this README or intentionally committed to the repository.
 
 ---
 
-## Hardware Prototype
+# Hardware Prototype
 
-RemoteSignLab includes a custom hardware authentication terminal designed around an ESP32-C3.
+RemoteSignLab includes a dedicated authentication terminal based on the **DFRobot Beetle ESP32-C3**.
 
-The terminal integrates:
+## Main Components
 
-- DFRobot Beetle ESP32-C3
-- MFRC522 RFID reader
-- DY50 fingerprint sensor
-- SSD1306 0.96-inch OLED display
-- Custom PCB designed with KiCad
+| Component | Purpose |
+| --- | --- |
+| DFRobot Beetle ESP32-C3 | Main embedded controller |
+| MFRC522 | RFID authentication |
+| DY50 | Fingerprint authentication |
+| SSD1306 0.96" OLED | Local status and workflow display |
+| Custom PCB | Electrical integration of the terminal |
 
-The hardware terminal is responsible for the local authentication steps required before a remote signature can be authorized by the backend.
+The terminal performs the local authentication operations required before the backend can authorize a remote electronic signature.
 
-### Prototype
+## Prototype
 
 <p align="center">
   <img
     src="docs/images/prototype/prototype-complete.jpg"
     alt="RemoteSignLab hardware prototype"
-    width="450"
+    width="500"
   >
 </p>
 
-The prototype combines the ESP32-C3, RFID reader, fingerprint sensor and OLED display on a dedicated PCB.
+The prototype combines the ESP32-C3, RFID reader, fingerprint sensor and OLED display on a custom PCB.
 
 ---
 
-## PCB Design
+# PCB Design
 
-The electronic schematic and PCB layout were designed with KiCad.
+The PCB was designed with **KiCad**.
 
-The editable KiCad source files are stored under:
+Editable design files are available in:
 
 [`hardware/kicad/`](hardware/kicad/)
 
-### Main KiCad Files
+## KiCad Files
 
-- [KiCad schematic](hardware/kicad/remotesign_lab.kicad_sch)
-- [KiCad PCB layout](hardware/kicad/remotesign_lab.kicad_pcb)
-
-If a KiCad project file is added later, it can also be stored in the same directory as:
-
-```text
-remotesign_lab.kicad_pro
-```
+- [Electronic schematic](hardware/kicad/remotesign_lab.kicad_sch)
+- [PCB layout](hardware/kicad/remotesign_lab.kicad_pcb)
 
 ---
 
 ## Electronic Schematic
 
-The schematic connects the main authentication and user-interface modules:
+The schematic integrates:
 
 - ESP32-C3
 - MFRC522 RFID reader
 - DY50 fingerprint sensor
 - SSD1306 OLED display
-- Power connections
-- I2C communication
+- Power distribution
 - SPI communication
 - UART communication
+- I2C communication
 
-The exported schematic is available here:
+### Schematic Preview
 
-[View the schematic PDF](hardware/fabrication/schematic.pdf)
+<p align="center">
+  <img
+    src="docs/images/pcb/schematic.png"
+    alt="RemoteSignLab electronic schematic"
+    width="950"
+  >
+</p>
 
-The editable source is available here:
+The complete exported schematic is also available as PDF:
 
-[Open the KiCad schematic](hardware/kicad/remotesign_lab.kicad_sch)
+[View schematic PDF](hardware/fabrication/schematic.pdf)
 
 ---
 
 ## PCB Routing
 
-The PCB routing was designed in KiCad and optimized for local prototype fabrication.
+The PCB routing was designed specifically for local prototype fabrication.
 
-The editable PCB file is available here:
+### Routing Preview
 
-[Open the KiCad PCB layout](hardware/kicad/remotesign_lab.kicad_pcb)
+<p align="center">
+  <img
+    src="docs/images/pcb/pcb-routing.png"
+    alt="RemoteSignLab PCB routing"
+    width="850"
+  >
+</p>
 
-The routing was prepared so that the board could be manufactured manually using a copper-clad board, black resist coating, laser engraving and chemical etching.
+The editable KiCad PCB file is available here:
+
+[Open the PCB layout](hardware/kicad/remotesign_lab.kicad_pcb)
 
 ---
 
-## PCB Fabrication
+# PCB Fabrication
 
-The PCB was manufactured manually rather than ordered from an industrial PCB manufacturer.
+The PCB was fabricated locally rather than ordered from an industrial PCB manufacturer.
 
-The process combines:
+The manufacturing process combines:
 
 - KiCad PCB design
 - Copper-layer export
 - Black-and-white image processing
-- Image inversion
-- Black paint used as temporary resist
+- Pattern inversion
+- Black resist coating
 - Emblaser 2 laser engraving
 - Chemical copper etching
 - Manual drilling
@@ -196,25 +224,23 @@ The process combines:
 - Electrical continuity testing
 - Functional testing
 
-### Fabrication Process
-
-The fabrication workflow was:
+## Fabrication Workflow
 
 1. Create the electronic schematic in KiCad.
-2. Assign footprints to the components.
-3. Route the PCB in KiCad.
+2. Assign footprints to all components.
+3. Place and route the PCB.
 4. Export the copper layer.
 5. Convert the layout to a high-contrast black-and-white image.
-6. Invert the image for the resist-removal process.
-7. Apply black paint to the copper-clad board.
+6. Invert the copper pattern for the resist-removal process.
+7. Coat the copper-clad board with black paint.
 8. Allow the coating to dry.
 9. Position and focus the board in the Emblaser 2.
 10. Laser-engrave the inverted PCB pattern.
-11. Remove the resist only from the copper areas that must be etched.
+11. Remove the resist from the areas where copper must be etched.
 12. Place the board in the chemical etching solution.
 13. Remove the exposed unwanted copper.
-14. Clean the remaining resist from the PCB.
-15. Drill the component pads and required holes.
+14. Clean the remaining resist.
+15. Drill the pads and component holes.
 16. Inspect track continuity.
 17. Solder the electronic components.
 18. Perform electrical and functional tests.
@@ -223,17 +249,17 @@ The fabrication workflow was:
 
 ## Laser Engraving Pattern
 
-The copper layout was inverted before laser engraving because the black coating acts as a temporary chemical-etching resist.
+The copper layout is inverted before laser engraving because the black coating acts as a temporary chemical-etching resist.
 
-The laser removes the coating from the areas where copper must later be removed by the chemical etchant.
+The Emblaser 2 removes the coating only from the areas where copper must later be removed by the etchant.
 
-The inverted fabrication file is available here:
+The fabrication pattern is available here:
 
-[View the inverted copper layout](hardware/fabrication/copper-layout-inverted.pdf)
+[View inverted copper layout](hardware/fabrication/copper-layout-inverted.pdf)
 
 ---
 
-## PCB After Laser Engraving
+## After Laser Engraving
 
 <p align="center">
   <img
@@ -243,13 +269,13 @@ The inverted fabrication file is available here:
   >
 </p>
 
-At this stage, the Emblaser 2 has removed selected areas of the black resist coating according to the inverted copper layout.
+At this stage, the laser has selectively removed the black resist coating.
 
-The exposed copper will be removed during the chemical etching stage.
+The exposed copper areas will be removed during chemical etching.
 
 ---
 
-## PCB After Chemical Etching
+## After Chemical Etching
 
 <p align="center">
   <img
@@ -259,17 +285,15 @@ The exposed copper will be removed during the chemical etching stage.
   >
 </p>
 
-After chemical etching, the unwanted exposed copper is removed.
+After chemical etching, the unwanted copper has been removed.
 
-The copper protected by the remaining resist forms the final conductive tracks of the PCB.
+The remaining copper protected by the resist forms the conductive PCB tracks.
 
-The board can then be cleaned, drilled and assembled.
+The board can then be cleaned, drilled, assembled and electrically tested.
 
 ---
 
-## Hardware Design Files
-
-The hardware files are organized as follows:
+# Hardware Files
 
 ```text
 hardware/
@@ -282,7 +306,7 @@ hardware/
     └── copper-layout-inverted.pdf
 ```
 
-Prototype and PCB photographs are stored under:
+Hardware images are stored under:
 
 ```text
 docs/images/
@@ -290,30 +314,32 @@ docs/images/
 │   └── prototype-complete.jpg
 │
 └── pcb/
+    ├── schematic.png
+    ├── pcb-routing.png
     ├── pcb-after-laser.jpg
     └── pcb-after-etching.jpg
 ```
 
 ---
 
-## Repository Structure
+# Repository Structure
 
 | Path | Purpose |
 | --- | --- |
-| `app/` | FastAPI application, APIs, Web interfaces, security modules and services |
+| `app/` | FastAPI backend, APIs, Web interfaces, security modules and services |
 | `alembic/` | PostgreSQL database migrations |
-| `firmware/` | ESP32-C3 firmware and safe configuration templates |
-| `hardware/kicad/` | Editable KiCad schematic and PCB design |
+| `firmware/remotesign_lab/` | ESP32-C3 firmware and safe configuration templates |
+| `hardware/kicad/` | Editable KiCad schematic and PCB layout |
 | `hardware/fabrication/` | PCB fabrication exports and laser patterns |
-| `docs/images/` | Prototype and PCB photographs |
-| `scripts/` | Development utilities, certificate tools and development TSA |
-| `tests/` | Automated tests |
+| `docs/images/` | Hardware prototype and PCB images |
 | `docs/` | PAdES, TSA, certificate and audit documentation |
+| `scripts/` | Development utilities, certificate tools and development TSA |
+| `tests/` | Automated test suite |
 | `softhsm/` | Safe SoftHSM configuration; runtime tokens are excluded |
 
 ---
 
-## Software Requirements
+# Software Requirements
 
 - Python 3
 - PostgreSQL
@@ -321,7 +347,7 @@ docs/images/
 - PKCS#11 module
 - OpenSSL
 - ESP32-C3 Arduino-compatible development environment
-- KiCad for PCB design
+- KiCad
 
 Pinned Python dependencies are listed in:
 
@@ -329,36 +355,33 @@ Pinned Python dependencies are listed in:
 
 ---
 
-## Installation
+# Installation
 
-Create the Python virtual environment:
+## Python Environment
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-```
-
-Install the Python dependencies:
-
-```bash
 pip install -r requirements.txt
 ```
 
-Create the local application configuration:
+## Application Configuration
+
+Create a local configuration file:
 
 ```bash
 cp .env.example .env
 ```
 
-Replace every placeholder in `.env` with the appropriate local value.
+Replace all placeholders in `.env` with appropriate local values.
 
-Never commit `.env` or any secret referenced by it.
+The `.env` file must never be committed.
 
 ---
 
-## Database
+# Database
 
-Apply the database migrations before starting the backend:
+Apply the database migrations:
 
 ```bash
 alembic upgrade head
@@ -372,9 +395,11 @@ a84f2c1d9e70
 
 ---
 
-## Running the Backend
+# Running RemoteSignLab
 
-Start the HTTPS FastAPI backend with local TLS files that are not tracked by Git:
+## Backend
+
+Start the FastAPI backend over HTTPS:
 
 ```bash
 uvicorn app.main:app \
@@ -384,13 +409,13 @@ uvicorn app.main:app \
   --ssl-certfile certs/server.crt
 ```
 
-The private TLS key must remain outside version control.
+TLS private keys are local files and must remain outside version control.
 
 ---
 
-## Development TSA
+## Development RFC 3161 TSA
 
-For local PAdES-B-T development, start the RFC 3161 development TSA separately:
+For local PAdES-B-T development:
 
 ```bash
 python -m scripts.dev_tsa_server \
@@ -399,17 +424,17 @@ python -m scripts.dev_tsa_server \
   --port 8090
 ```
 
-The development TSA and development certificates are intended only for testing and demonstration.
+The development TSA and its certificates are intended only for testing and demonstration.
 
-They must not be treated as a production PKI.
+They are not a production PKI.
 
 ---
 
-## Firmware Configuration
+# Firmware Configuration
 
-Firmware credentials and the local trust anchor are intentionally excluded from Git.
+Firmware credentials and the local HTTPS trust anchor are intentionally excluded from Git.
 
-Create the local files from the provided templates:
+Create them from the safe templates:
 
 ```bash
 cp firmware/remotesign_lab/secrets.example.h \
@@ -419,29 +444,27 @@ cp firmware/remotesign_lab/trust_anchor.example.h \
    firmware/remotesign_lab/trust_anchor.h
 ```
 
-Configure local Wi-Fi credentials and the device authentication secret only in:
+Local Wi-Fi credentials and the device authentication secret must only be stored in:
 
 ```text
 firmware/remotesign_lab/secrets.h
 ```
 
-Configure the local CA certificate used to validate the HTTPS backend in:
+The local CA certificate used to validate the HTTPS server belongs in:
 
 ```text
 firmware/remotesign_lab/trust_anchor.h
 ```
 
-These files must never be committed.
+Both files are excluded from version control.
 
-TLS certificate validation remains enabled.
-
-The firmware loads the trusted CA certificate with:
+TLS certificate validation remains enabled through:
 
 ```cpp
 secureClient.setCACert(SERVER_CA_CERT);
 ```
 
-Do not replace certificate validation with:
+The firmware must not use:
 
 ```cpp
 setInsecure();
@@ -449,13 +472,13 @@ setInsecure();
 
 ---
 
-## Security Model
+# Security Architecture
 
-RemoteSignLab applies multiple security mechanisms across the device, backend and signing infrastructure.
+RemoteSignLab applies security controls at the device, communication, backend, signing and auditing layers.
 
-### Device Authentication
+## Device Authentication
 
-Sensitive ESP32-C3 requests are authenticated using:
+Sensitive ESP32-C3 requests are protected using:
 
 - HMAC-SHA256
 - Timestamp validation
@@ -466,58 +489,121 @@ Sensitive ESP32-C3 requests are authenticated using:
 - Document hash binding
 - Explicit approval context
 
-### User Authentication
+---
 
-The signing terminal combines:
+## Multi-Factor Authentication
+
+The hardware terminal combines:
 
 - RFID authentication
 - Fingerprint authentication
 
-Both factors are validated before the remote signing operation is authorized.
+Both checks are required before the remote signing workflow can proceed.
 
-### Signing Key Protection
+---
+
+## Signing Key Protection
 
 The private RSA signing key:
 
 - Is never stored on the ESP32-C3
-- Is not stored directly in application source code
+- Is never embedded in the application source code
 - Is accessed through PKCS#11
-- Is protected by SoftHSM in the prototype environment
-
-### TLS
-
-ESP32-C3 communications with the backend use HTTPS with server-certificate validation.
-
-No insecure TLS fallback is used.
-
-### Anti-Replay Protection
-
-Timestamp and persistent nonce validation are used to reject replayed device requests.
-
-### Audit Trail
-
-Security-sensitive events are written to the audit log.
-
-The audit implementation includes:
-
-- Structured event categories
-- Actor identification
-- Business correlation
-- Failure codes
-- Sanitization of sensitive fields
-- SHA-256 hash chaining
-- PostgreSQL advisory locking
-- Integrity verification
-- ADMIN-only audit access
-- CSV export
-
-The audit hash chain provides tamper evidence.
-
-It does not provide absolute immutability against an administrator with unrestricted database access.
+- Is protected by SoftHSM2 in the prototype environment
 
 ---
 
-## Sensitive Data Policy
+## TLS
+
+Communication between the ESP32-C3 and FastAPI backend uses HTTPS with server certificate validation.
+
+No insecure TLS fallback is used.
+
+---
+
+## Anti-Replay Protection
+
+Device requests include:
+
+- Timestamps
+- Random nonces
+
+Used nonces are persisted to prevent replay across application restarts.
+
+---
+
+# PAdES Signatures
+
+RemoteSignLab supports two PAdES profiles.
+
+## PAdES-B-B
+
+Provides the cryptographic PDF signature and signer certificate information.
+
+## PAdES-B-T
+
+Extends the signature with an RFC 3161 timestamp token.
+
+Future visible PDF signatures include:
+
+```text
+ELECTRONICALLY SIGNED
+RemoteSignLab
+
+Signer
+Certificate
+Profile
+Date
+Signature ID
+```
+
+Existing signed PDFs are never modified.
+
+---
+
+# Security Audit Trail
+
+Security-sensitive operations are recorded in a structured audit trail.
+
+The audit system includes:
+
+- Event categories
+- Actor identification
+- User, device, document, request and signature correlation
+- Technical failure codes
+- Sensitive-data sanitization
+- HTTP request context
+- SHA-256 hash chaining
+- PostgreSQL advisory locking
+- Integrity verification
+- ADMIN-only access
+- Filtering and pagination
+- CSV export
+
+---
+
+## Tamper-Evident Audit Chain
+
+New audit events contain:
+
+```text
+previous_hash
+event_hash
+```
+
+The hash chain provides evidence of database-event modification.
+
+Audit writes are serialized through a PostgreSQL transaction-level advisory lock to prevent concurrent events from referencing the same previous hash.
+
+Historical events created before hash chaining remain unsealed and are not artificially modified.
+
+The integrity checker recalculates the chain in read-only mode.
+
+> The audit hash chain provides tamper evidence, not absolute immutability against an administrator with unrestricted database access.
+
+---
+
+# Sensitive Data Policy
 
 The following data must never be committed:
 
@@ -532,143 +618,89 @@ The following data must never be committed:
 - Private CA keys
 - Private TSA keys
 - Private signing keys
+- Authentication tokens
 - Session tokens
 - CSRF tokens
-- Administrative API secrets
+- Administrative secrets
 
-The repository contains safe templates only.
-
----
-
-## PAdES Signatures
-
-RemoteSignLab supports:
-
-### PAdES-B-B
-
-A basic PAdES signature containing the cryptographic PDF signature and signer certificate information.
-
-### PAdES-B-T
-
-A PAdES signature extended with an RFC 3161 timestamp token.
-
-Future visible PDF signatures include:
-
-```text
-ELECTRONICALLY SIGNED
-RemoteSignLab
-Signer
-Certificate
-Profile
-Date
-Signature ID
-```
-
-Existing signed PDFs are not modified.
+Only safe templates are included in the repository.
 
 ---
 
-## Audit Integrity
+# Testing
 
-New audit events are linked through a SHA-256 hash chain.
-
-Each event contains:
-
-```text
-previous_hash
-event_hash
-```
-
-Audit writes are serialized using a PostgreSQL transaction-level advisory lock.
-
-Historical audit events created before hash chaining remain unsealed and are not artificially backfilled.
-
-The ADMIN interface provides an integrity-check endpoint that recalculates the chain without modifying the database.
-
----
-
-## Tests
-
-Compile Python modules:
+## Compile
 
 ```bash
 python -m compileall app scripts
 ```
 
-Run the automated test suite:
+## Automated Tests
 
 ```bash
 pytest
 ```
 
-Check installed Python dependencies:
-
-```bash
-pip check
-```
-
-Check known dependency vulnerabilities:
-
-```bash
-pip-audit -r requirements.txt
-```
-
-Run the static security analysis:
-
-```bash
-bandit -r app scripts -x tests
-```
-
-Check Git whitespace consistency:
-
-```bash
-git diff --check
-```
-
-Current baseline:
+Current validated baseline:
 
 ```text
 143 tests passing
 ```
 
+## Dependency Consistency
+
+```bash
+pip check
+```
+
+## Dependency Security Audit
+
+```bash
+pip-audit -r requirements.txt
+```
+
+## Static Security Analysis
+
+```bash
+bandit -r app scripts -x tests
+```
+
+## Git Consistency
+
+```bash
+git diff --check
+```
+
 ---
 
-## Security Scan Status
+# Security Validation Status
 
-The current validated baseline includes:
+Current validated baseline:
 
-```text
-pytest:
-143 passed
-
-pip check:
-No broken requirements found
-
-pip-audit:
-No known vulnerabilities found
-
-Bandit:
-0 High
-0 Medium
-2 Low
-```
+| Check | Result |
+| --- | --- |
+| Automated tests | 143 passed |
+| `pip check` | No broken requirements |
+| `pip-audit` | No known vulnerabilities |
+| Bandit High | 0 |
+| Bandit Medium | 0 |
+| Bandit Low | 2 |
+| Git whitespace check | Passed |
 
 The two remaining Low-severity Bandit findings are associated with the local development TSA invoking OpenSSL through Python `subprocess` without shell execution.
 
 ---
 
-## Stable Versions
+# Stable Milestones
 
-The repository contains stable development milestones:
+The repository includes the following stable development tags:
 
 - `pades-bt-stable`
 - `audit-hardening-stable`
 
 ---
 
-## Documentation
-
-Additional technical documentation is available here:
+# Technical Documentation
 
 - [PAdES implementation](docs/pades.md)
 - [Development signing certificate](docs/pades-test-certificate.md)
@@ -677,32 +709,40 @@ Additional technical documentation is available here:
 
 ---
 
-## Development Scope
+# Project Scope
 
-RemoteSignLab is intended as an academic and demonstration prototype.
+RemoteSignLab demonstrates a complete academic remote-signature workflow covering:
 
-The current project demonstrates:
-
-- Secure remote signature workflow
-- Multi-factor hardware authentication
-- Device-to-server authenticated communication
-- PKCS#11 signing
-- PAdES electronic signatures
-- RFC 3161 timestamps
+- Web application development
+- Embedded systems
+- Multi-factor authentication
+- Secure device-to-server communication
+- HMAC-based device authentication
+- Anti-replay mechanisms
+- PKCS#11
+- SoftHSM2
+- RSA signatures
+- PAdES
+- RFC 3161 timestamping
 - Security audit logging
-- Tamper-evident audit chaining
-- Embedded development
-- PCB design
-- Local PCB fabrication
+- Tamper-evident audit chains
+- KiCad schematic design
+- PCB routing
+- PCB prototyping
 - Laser engraving
-- Chemical PCB etching
+- Chemical etching
 
 ---
 
-## Disclaimer
+# Disclaimer
 
-RemoteSignLab is an academic and demonstration prototype.
+RemoteSignLab is an **academic and demonstration prototype**.
 
-Its development certificates, development TSA, SoftHSM configuration, locally manufactured PCB and trust model must not be considered equivalent to a production PKI, certified HSM or qualified electronic-signature service.
+Its development certificates, development TSA, SoftHSM2 configuration, locally manufactured PCB and trust model must not be considered equivalent to:
 
-Production deployment would require additional controls such as hardened key-management infrastructure, secure device provisioning, production PKI, operational monitoring and an appropriate regulatory and certification framework.
+- A production PKI
+- A certified hardware security module
+- A qualified trust service provider
+- A qualified electronic-signature service
+
+A production deployment would require additional controls such as secure hardware key storage, hardened provisioning, production PKI, device lifecycle management, operational monitoring, high-availability infrastructure and the appropriate regulatory and certification framework.
