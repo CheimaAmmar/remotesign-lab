@@ -21,8 +21,8 @@ def build_canonical_message(
         nonce,
     ]
 
-    # On n'ajoute extra_data que lorsqu'il existe afin de préserver
-    # le format canonique des requêtes qui n'en fournissent pas.
+    # Append extra_data only when present to preserve the canonical
+    # format of requests that do not provide it.
     if extra_data:
         parts.append(extra_data)
 
@@ -42,7 +42,7 @@ def verify_device_hmac(
 ) -> bool:
 
     # ==================================================
-    # VERIFICATION TIMESTAMP
+    # TIMESTAMP VERIFICATION
     # ==================================================
 
     try:
@@ -60,7 +60,7 @@ def verify_device_hmac(
         return False
 
     # ==================================================
-    # SECRET HEX -> BYTES
+    # HEX SECRET -> BYTES
     # ==================================================
 
     try:
@@ -72,7 +72,7 @@ def verify_device_hmac(
         return False
 
     # ==================================================
-    # MESSAGE CANONIQUE
+    # CANONICAL MESSAGE
     # ==================================================
 
     canonical_message = (
@@ -96,7 +96,7 @@ def verify_device_hmac(
     ).hexdigest()
 
     # ==================================================
-    # COMPARAISON SECURISEE
+    # SECURE COMPARISON
     # ==================================================
 
     try:

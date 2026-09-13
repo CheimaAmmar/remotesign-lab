@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>Mes documents | RemoteSignLab</title>
+  <title>My documents | RemoteSignLab</title>
   <link rel="stylesheet" href="/ui/static/styles.css">
   <link rel="stylesheet" href="/user/static/user.css">
   <script src="/user/static/app.js" defer></script>
@@ -12,18 +12,18 @@
 <body class="app-page user-app-page">
   <header class="app-header">
     <div class="header-inner">
-      <a class="brand brand-link" href="/user" aria-label="Accueil utilisateur RemoteSignLab">
+      <a class="brand brand-link" href="/user" aria-label="RemoteSignLab user home">
         <span class="brand-mark" aria-hidden="true">RL</span>
         <span>
           <strong>RemoteSignLab</strong>
-          <small>Espace utilisateur</small>
+          <small>User area</small>
         </span>
       </a>
 
       <div class="session-actions">
-        <span id="session-indicator" class="session-indicator" role="status">Vérification de la session…</span>
+        <span id="session-indicator" class="session-indicator" role="status">Checking session…</span>
         <form id="logout-form" action="/user/logout" method="post">
-          <button id="logout-button" class="button button-quiet" type="submit" disabled>Se déconnecter</button>
+          <button id="logout-button" class="button button-quiet" type="submit" disabled>Sign out</button>
         </form>
       </div>
     </div>
@@ -31,9 +31,9 @@
 
   <main class="page-shell user-shell">
     <section class="intro" aria-labelledby="page-title">
-      <p class="eyebrow">Votre espace sécurisé</p>
-      <h1 id="page-title">Bonjour <span id="user-name">—</span></h1>
-      <p>Consultez intégralement un PDF, confirmez votre consentement, puis envoyez uniquement une demande à l’ESP32.</p>
+      <p class="eyebrow">Your secure area</p>
+      <h1 id="page-title">Hello <span id="user-name">—</span></h1>
+      <p>Read the complete PDF, confirm your consent, then send only a request to the ESP32.</p>
     </section>
 
     <div id="global-alert" class="alert" role="alert" aria-live="assertive" hidden></div>
@@ -42,13 +42,13 @@
       <div class="panel-heading">
         <span class="step-number" aria-hidden="true">1</span>
         <div>
-          <h2 id="documents-title">Mes documents à signer</h2>
-          <p>Vous ne voyez que les documents associés à votre compte.</p>
+          <h2 id="documents-title">My documents to sign</h2>
+          <p>You can only see documents assigned to your account.</p>
         </div>
       </div>
 
       <div id="documents-list" class="user-document-list" aria-live="polite">
-        <p class="empty-state">Chargement des documents…</p>
+        <p class="empty-state">Loading documents…</p>
       </div>
     </section>
 
@@ -56,24 +56,24 @@
       <div class="panel-heading">
         <span class="step-number" aria-hidden="true">2</span>
         <div>
-          <h2 id="consent-title">Consentement à la signature</h2>
+          <h2 id="consent-title">Consent to sign</h2>
           <p id="consent-document-name">—</p>
-          <p>Cette étape enregistre votre consentement. L’authentification sur le terminal ESP32 ne commence qu’après votre demande.</p>
+          <p>This step records your consent. Authentication on the ESP32 device starts only after your request.</p>
         </div>
       </div>
 
       <form id="consent-form" class="consent-form">
         <label class="consent-check">
           <input id="document-viewed" type="checkbox" required>
-          <span>J’ai consulté le document.</span>
+          <span>I have reviewed the document.</span>
         </label>
         <label class="consent-check">
           <input id="signature-confirmed" type="checkbox" required>
-          <span>Je confirme vouloir signer ce document.</span>
+          <span>I confirm that I want to sign this document.</span>
         </label>
         <div class="consent-actions">
-          <button id="cancel-consent" class="button button-quiet" type="button">Annuler</button>
-          <button id="request-signature" class="button button-accent" type="submit">Demander la signature</button>
+          <button id="cancel-consent" class="button button-quiet" type="button">Cancel</button>
+          <button id="request-signature" class="button button-accent" type="submit">Request signature</button>
         </div>
       </form>
 

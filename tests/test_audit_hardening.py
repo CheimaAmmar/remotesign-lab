@@ -850,7 +850,7 @@ class AuditAdminApiTests(unittest.TestCase):
             PROJECT_ROOT / "app/web/static/app.js"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("Journal d’audit", template)
+        self.assertIn("Audit log", template)
         self.assertIn("/ui/api/audit/export.csv", template)
         self.assertIn("cell.textContent", script)
         self.assertNotIn("innerHTML", script)

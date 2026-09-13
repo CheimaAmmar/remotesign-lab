@@ -1,28 +1,28 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>Administration des documents | RemoteSignLab</title>
+  <title>Document administration | RemoteSignLab</title>
   <link rel="stylesheet" href="/ui/static/styles.css">
   <script src="/ui/static/app.js" defer></script>
 </head>
 <body class="app-page">
   <header class="app-header">
     <div class="header-inner">
-      <a class="brand brand-link" href="/ui" aria-label="Accueil RemoteSignLab">
+      <a class="brand brand-link" href="/ui" aria-label="RemoteSignLab home">
         <span class="brand-mark" aria-hidden="true">RL</span>
         <span>
           <strong>RemoteSignLab</strong>
-          <small>Signature locale</small>
+          <small>Local signing</small>
         </span>
       </a>
 
       <div class="session-actions">
-        <span id="session-indicator" class="session-indicator" role="status">Vérification de la session…</span>
+        <span id="session-indicator" class="session-indicator" role="status">Checking session…</span>
         <form id="logout-form" action="/ui/logout" method="post">
-          <button id="logout-button" class="button button-quiet" type="submit" disabled>Se déconnecter</button>
+          <button id="logout-button" class="button button-quiet" type="submit" disabled>Sign out</button>
         </form>
       </div>
     </div>
@@ -30,9 +30,9 @@
 
   <main class="page-shell">
     <section class="intro" aria-labelledby="page-title">
-      <p class="eyebrow">Administration des documents</p>
-      <h1 id="page-title">Préparer et attribuer un PDF</h1>
-      <p>Déposez le document et attribuez-le à son propriétaire. La demande de signature sera créée uniquement depuis l’espace utilisateur.</p>
+      <p class="eyebrow">Document administration</p>
+      <h1 id="page-title">Prepare and assign a PDF</h1>
+      <p>Upload the document and assign it to its owner. The signature request can only be created from the user area.</p>
     </section>
 
     <div id="global-alert" class="alert" role="alert" aria-live="assertive" hidden></div>
@@ -43,27 +43,27 @@
           <div class="panel-heading">
             <span class="step-number" aria-hidden="true">1</span>
             <div>
-              <h2 id="upload-title">Choisir le document</h2>
-              <p>Format PDF, 20 Mio maximum.</p>
+              <h2 id="upload-title">Choose the document</h2>
+              <p>PDF format, 20 MiB maximum.</p>
             </div>
           </div>
 
           <form id="upload-form" class="upload-form" novalidate>
             <div class="field">
-              <label for="document-owner">Propriétaire du document</label>
+              <label for="document-owner">Document owner</label>
               <select id="document-owner" name="user_id" required disabled>
-                <option value="">Sélectionner un utilisateur actif</option>
+                <option value="">Select an active user</option>
               </select>
-              <p class="field-hint">Ce propriétaire sera le seul utilisateur autorisé à consulter et demander la signature du PDF.</p>
+              <p class="field-hint">Only this owner will be allowed to view the PDF and request its signature.</p>
             </div>
 
             <label class="file-picker" for="pdf-file">
-              <span class="file-picker-title">Sélectionner un fichier PDF</span>
-              <span id="file-summary" class="file-picker-summary">Aucun document sélectionné</span>
+              <span class="file-picker-title">Select a PDF file</span>
+              <span id="file-summary" class="file-picker-summary">No document selected</span>
               <input id="pdf-file" name="file" type="file" accept="application/pdf,.pdf" required disabled>
             </label>
 
-            <button id="upload-button" class="button button-primary" type="submit" disabled>Uploader le PDF</button>
+            <button id="upload-button" class="button button-primary" type="submit" disabled>Upload PDF</button>
           </form>
         </section>
 
@@ -71,76 +71,76 @@
           <div class="panel-heading">
             <span class="step-number" aria-hidden="true">2</span>
             <div>
-              <h2 id="document-title">Document prêt</h2>
-              <p>Empreinte calculée et vérifiée côté serveur.</p>
+              <h2 id="document-title">Document ready</h2>
+              <p>Hash calculated and verified on the server.</p>
             </div>
           </div>
 
           <dl class="document-details">
             <div>
-              <dt>Nom du fichier</dt>
+              <dt>File name</dt>
               <dd id="document-filename">—</dd>
             </div>
             <div>
-              <dt>Taille</dt>
+              <dt>Size</dt>
               <dd id="document-size">—</dd>
             </div>
             <div>
-              <dt>Identifiant du document</dt>
+              <dt>Document ID</dt>
               <dd id="document-id" class="monospace breakable">—</dd>
             </div>
             <div>
-              <dt>Empreinte SHA-256</dt>
+              <dt>SHA-256 hash</dt>
               <dd id="document-hash" class="monospace breakable">—</dd>
             </div>
           </dl>
 
           <div class="signature-action">
             <div>
-              <h3>Consentement utilisateur requis</h3>
-              <p>Document attribué à l’utilisateur.</p>
-              <p>En attente d’une demande de signature depuis l’espace utilisateur.</p>
+              <h3>User consent required</h3>
+              <p>Document assigned to the user.</p>
+              <p>Waiting for a signature request from the user area.</p>
             </div>
           </div>
         </section>
       </div>
 
       <aside class="status-panel" aria-labelledby="status-title">
-        <p class="eyebrow">État actuel</p>
-        <h2 id="status-title">En attente d’un document</h2>
-        <p id="status-message" class="status-message" aria-live="polite">Choisissez un PDF pour commencer.</p>
+        <p class="eyebrow">Current status</p>
+        <h2 id="status-title">Waiting for a document</h2>
+        <p id="status-message" class="status-message" aria-live="polite">Choose a PDF to begin.</p>
         <p id="queue-state-reference" class="request-reference" hidden>
-          État PostgreSQL : <strong id="queue-state" class="monospace">—</strong>
+          PostgreSQL status: <strong id="queue-state" class="monospace">—</strong>
         </p>
 
-        <ol class="state-list" aria-label="Progression de la demande">
+        <ol class="state-list" aria-label="Request progress">
           <li data-state="DOCUMENT_SELECTED">
             <span class="state-dot" aria-hidden="true"></span>
-            <span>Document sélectionné</span>
+            <span>Document selected</span>
           </li>
           <li data-state="UPLOADING">
             <span class="state-dot" aria-hidden="true"></span>
-            <span>Upload en cours</span>
+            <span>Upload in progress</span>
           </li>
           <li data-state="DOCUMENT_READY">
             <span class="state-dot" aria-hidden="true"></span>
-            <span>Document prêt</span>
+            <span>Document ready</span>
           </li>
           <li data-state="WAITING_AUTHENTICATION">
             <span class="state-dot" aria-hidden="true"></span>
-            <span>Attente d’authentification</span>
+            <span>Waiting for authentication</span>
           </li>
           <li data-state="AUTHENTICATION_SUCCEEDED">
             <span class="state-dot" aria-hidden="true"></span>
-            <span>Authentification réussie</span>
+            <span>Authentication successful</span>
           </li>
           <li data-state="SIGNATURE_SUCCEEDED">
             <span class="state-dot" aria-hidden="true"></span>
-            <span>Signature réussie</span>
+            <span>Signature successful</span>
           </li>
           <li data-state="SIGNATURE_REFUSED">
             <span class="state-dot" aria-hidden="true"></span>
-            <span>Signature refusée</span>
+            <span>Signature denied</span>
           </li>
         </ol>
 
@@ -151,21 +151,21 @@
     <section id="audit-panel" class="panel audit-panel" aria-labelledby="audit-title">
       <div class="audit-heading">
         <div>
-          <p class="eyebrow">Sécurité et traçabilité</p>
-          <h2 id="audit-title">Journal d’audit</h2>
-          <p>Consultation en lecture seule des événements applicatifs.</p>
+          <p class="eyebrow">Security and traceability</p>
+          <h2 id="audit-title">Audit log</h2>
+          <p>Read-only view of application events.</p>
         </div>
         <div class="audit-actions">
-          <span id="audit-integrity" class="audit-integrity" role="status">Intégrité non vérifiée</span>
-          <a id="audit-export" class="button button-quiet" href="/ui/api/audit/export.csv">Exporter CSV</a>
+          <span id="audit-integrity" class="audit-integrity" role="status">Integrity not checked</span>
+          <a id="audit-export" class="button button-quiet" href="/ui/api/audit/export.csv">Export CSV</a>
         </div>
       </div>
 
       <form id="audit-filters" class="audit-filters">
         <label>
-          Catégorie
+          Category
           <select name="category">
-            <option value="">Toutes</option>
+            <option value="">All</option>
             <option>AUTH</option>
             <option>DOCUMENT</option>
             <option>CONSENT</option>
@@ -179,13 +179,13 @@
           </select>
         </label>
         <label>
-          Événement
+          Event
           <input name="event_type" type="text" maxlength="64" placeholder="SIGNATURE_SUCCESS">
         </label>
         <label>
-          Acteur
+          Actor
           <select name="actor_type">
-            <option value="">Tous</option>
+            <option value="">All</option>
             <option>USER</option>
             <option>ADMIN</option>
             <option>DEVICE</option>
@@ -193,9 +193,9 @@
           </select>
         </label>
         <label>
-          Résultat
+          Outcome
           <select name="outcome">
-            <option value="">Tous</option>
+            <option value="">All</option>
             <option>SUCCESS</option>
             <option>FAILURE</option>
             <option>DENIED</option>
@@ -209,7 +209,7 @@
           Code
           <input name="failure_code" type="text" maxlength="64" placeholder="INVALID_HMAC">
         </label>
-        <button class="button button-primary" type="submit">Filtrer</button>
+        <button class="button button-primary" type="submit">Filter</button>
       </form>
 
       <div class="audit-table-wrap">
@@ -217,34 +217,34 @@
           <thead>
             <tr>
               <th>Date</th>
-              <th>Catégorie</th>
-              <th>Événement</th>
-              <th>Acteur</th>
-              <th>Utilisateur</th>
+              <th>Category</th>
+              <th>Event</th>
+              <th>Actor</th>
+              <th>User</th>
               <th>Device</th>
               <th>Document</th>
               <th>Request</th>
               <th>Signature</th>
-              <th>Résultat</th>
+              <th>Outcome</th>
               <th>Code</th>
             </tr>
           </thead>
           <tbody id="audit-rows">
-            <tr><td colspan="11">Chargement du journal…</td></tr>
+            <tr><td colspan="11">Loading audit log…</td></tr>
           </tbody>
         </table>
       </div>
 
       <div class="audit-pagination">
-        <button id="audit-previous" class="button button-quiet" type="button" disabled>Précédent</button>
+        <button id="audit-previous" class="button button-quiet" type="button" disabled>Previous</button>
         <span id="audit-page">—</span>
-        <button id="audit-next" class="button button-quiet" type="button" disabled>Suivant</button>
+        <button id="audit-next" class="button button-quiet" type="button" disabled>Next</button>
       </div>
 
       <section id="audit-details" class="audit-details" aria-labelledby="audit-details-title" hidden>
         <div class="audit-details-heading">
-          <h3 id="audit-details-title">Détails de l’événement</h3>
-          <button id="audit-details-close" class="button button-quiet" type="button">Fermer</button>
+          <h3 id="audit-details-title">Event details</h3>
+          <button id="audit-details-close" class="button button-quiet" type="button">Close</button>
         </div>
         <pre id="audit-details-content"></pre>
       </section>

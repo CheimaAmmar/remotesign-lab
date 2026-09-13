@@ -91,7 +91,7 @@ DOCUMENT_STORAGE = (
 
 
 # ======================================================
-# REJET CENTRALISE DE /sign
+# CENTRALIZED /sign REJECTION
 # ======================================================
 
 def reject_sign(
@@ -111,8 +111,8 @@ def reject_sign(
     request: Request | None = None,
 ) -> None:
 
-    # Libère la transaction courante et notamment
-    # un éventuel verrou SELECT ... FOR UPDATE.
+    # Release the current transaction, including any
+    # SELECT ... FOR UPDATE lock.
     database.rollback()
 
     if terminal_queue_failure and isinstance(
@@ -178,7 +178,7 @@ def sign_document(
 ) -> dict:
 
     # ==================================================
-    # IP SOURCE
+    # SOURCE IP
     # ==================================================
 
     source_ip = (
@@ -188,7 +188,7 @@ def sign_document(
     )
 
     # ==================================================
-    # NORMALISATION
+    # NORMALIZATION
     # ==================================================
 
     device_uid = (
@@ -212,8 +212,8 @@ def sign_document(
     # ==================================================
     # DEVICE
     #
-    # IMPORTANT :
-    # device doit être chargé AVANT tout usage device.id
+    # IMPORTANT:
+    # device must be loaded BEFORE any use of device.id
     # ==================================================
 
     device = database.scalar(
@@ -430,7 +430,7 @@ def sign_document(
         )
 
     # ==================================================
-    # SESSION + VERROU POSTGRESQL
+    # SESSION + POSTGRESQL LOCK
     # ==================================================
 
     auth_session = database.scalar(
@@ -472,7 +472,7 @@ def sign_document(
         )
 
     # ==================================================
-    # USER DE LA DEMANDE WEB
+    # USER FROM THE WEB REQUEST
     # ==================================================
 
     if not signature_request_is_authorized_for_session(
@@ -498,7 +498,7 @@ def sign_document(
         )
 
     # ==================================================
-    # SESSION VERIFIEE
+    # VERIFIED SESSION
     # ==================================================
 
     if auth_session.verified_at is None:
@@ -517,7 +517,7 @@ def sign_document(
         )
 
     # ==================================================
-    # SESSION DEJA UTILISEE
+    # SESSION ALREADY USED
     # ==================================================
 
     if auth_session.used_at is not None:
@@ -534,7 +534,7 @@ def sign_document(
         )
 
     # ==================================================
-    # DOUBLE PROTECTION : SIGNATURE DEJA EXISTANTE ?
+    # DOUBLE PROTECTION: DOES A SIGNATURE ALREADY EXIST?
     # ==================================================
 
     existing_signature = database.scalar(
@@ -564,7 +564,7 @@ def sign_document(
         )
 
     # ==================================================
-    # DOCUMENT ID DE LA SESSION
+    # SESSION DOCUMENT ID
     # ==================================================
 
     if auth_session.document_id != document_id:
@@ -581,7 +581,7 @@ def sign_document(
         )
 
     # ==================================================
-    # DOCUMENT HASH DE LA SESSION
+    # SESSION DOCUMENT HASH
     # ==================================================
 
     if auth_session.document_hash != document_hash:
@@ -598,7 +598,7 @@ def sign_document(
         )
 
     # ==================================================
-    # DECISION DE LA SESSION
+    # SESSION DECISION
     # ==================================================
 
     if auth_session.decision != decision:
@@ -615,7 +615,7 @@ def sign_document(
         )
 
     # ==================================================
-    # AUTORISATION DE SIGNATURE RECENTE
+    # RECENT SIGNING AUTHORIZATION
     # ==================================================
 
     now = datetime.now(
@@ -644,7 +644,7 @@ def sign_document(
         )
 
     # ==================================================
-    # DOCUMENT POSTGRESQL
+    # POSTGRESQL DOCUMENT
     # ==================================================
 
     document = database.get(
@@ -703,7 +703,7 @@ def sign_document(
         )
 
     # ==================================================
-    # FICHIER REEL
+    # ACTUAL FILE
     # ==================================================
 
     storage_root = (
@@ -747,7 +747,7 @@ def sign_document(
         )
 
     # ==================================================
-    # RECALCUL SHA-256 DU VRAI PDF
+    # RECALCULATE SHA-256 FOR THE ACTUAL PDF
     # ==================================================
 
     sha256 = hashlib.sha256()
@@ -788,7 +788,7 @@ def sign_document(
     )
 
     # ==================================================
-    # INTEGRITE PDF / DB
+    # PDF / DB INTEGRITY
     # ==================================================
 
     if actual_document_hash != document.document_hash:
@@ -808,7 +808,7 @@ def sign_document(
         )
 
     # ==================================================
-    # INTEGRITE PDF / SESSION
+    # PDF / SESSION INTEGRITY
     # ==================================================
 
     if actual_document_hash != auth_session.document_hash:
@@ -828,7 +828,7 @@ def sign_document(
         )
 
     # ==================================================
-    # INTEGRITE PDF / REQUETE
+    # PDF / REQUEST INTEGRITY
     # ==================================================
 
     if actual_document_hash != document_hash:
@@ -886,7 +886,7 @@ def sign_document(
     )
 
     # ==================================================
-    # DIGEST FIABLE
+    # TRUSTED DIGEST
     # ==================================================
 
     document_digest = bytes.fromhex(
@@ -922,7 +922,7 @@ def sign_document(
         )
 
     # ==================================================
-    # PDF PADES TEMPORAIRE + PUBLICATION ATOMIQUE
+    # TEMPORARY PADES PDF + ATOMIC PUBLICATION
     # ==================================================
 
     signature_id = uuid.uuid4()
@@ -1039,7 +1039,7 @@ def sign_document(
         )
 
     # ==================================================
-    # ENREGISTREMENT SIGNATURE
+    # SIGNATURE RECORD
     # ==================================================
 
     signature_record = DocumentSignature(
@@ -1147,7 +1147,7 @@ def sign_document(
         )
 
         # ==============================================
-        # CONSOMMATION SESSION
+        # SESSION CONSUMPTION
         # ==============================================
 
         signed_at = datetime.now(
@@ -1194,10 +1194,10 @@ def sign_document(
         final_signed_path.unlink(missing_ok=True)
         raise
 
-    # Le fichier final existe avant le commit. En cas d'issue de commit
-    # ambiguë (p. ex. perte de connexion après validation PostgreSQL), il
-    # est volontairement conservé pour qu'une ligne éventuellement validée
-    # ne pointe jamais vers un fichier supprimé.
+    # The final file exists before the commit. If the commit outcome is
+    # ambiguous (for example, a lost connection after PostgreSQL commits),
+    # it is intentionally preserved so that a possibly committed row never
+    # points to a deleted file.
     try:
         database.commit()
     except Exception:
@@ -1209,7 +1209,7 @@ def sign_document(
     )
 
     # ==================================================
-    # REPONSE
+    # RESPONSE
     # ==================================================
 
     return {

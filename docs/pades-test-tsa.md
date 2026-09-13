@@ -1,15 +1,15 @@
-# TSA RFC 3161 locale de développement
+# Local development RFC 3161 TSA
 
-Cette procédure crée une vraie réponse RFC 3161 avec OpenSSL. La TSA est
-distincte du certificat TLS, du signataire PDF et de la clé SoftHSM.
+This procedure creates a genuine RFC 3161 response with OpenSSL. The TSA is
+separate from the TLS certificate, PDF signer, and SoftHSM key.
 
-## 1. Créer les clés hors du dépôt
+## 1. Create the keys outside the repository
 
-Choisir un répertoire privé **extérieur** au dépôt et l'exposer uniquement au
-processus TSA :
+Choose a private directory **outside** the repository and expose it only to
+the TSA process:
 
 ```bash
-export REMOTESIGN_LAB_TSA_DIR=/chemin/prive/hors-du-depot/remotesign-lab-tsa
+export REMOTESIGN_LAB_TSA_DIR=/private/path/outside-repository/remotesign-lab-tsa
 install -d -m 700 "$REMOTESIGN_LAB_TSA_DIR"
 
 openssl req -x509 -newkey rsa:3072 -nodes -sha256 -days 3650 \
@@ -28,7 +28,7 @@ chmod 600 "$REMOTESIGN_LAB_TSA_DIR/tsa-ca.key" \
   "$REMOTESIGN_LAB_TSA_DIR/tsa.key"
 ```
 
-Le fichier public `scripts/dev-tsa-certificate.ext` contient :
+The public `scripts/dev-tsa-certificate.ext` file contains:
 
 ```text
 basicConstraints=critical,CA:FALSE
@@ -38,7 +38,7 @@ subjectKeyIdentifier=hash
 authorityKeyIdentifier=keyid,issuer
 ```
 
-Signer le certificat TSA :
+Sign the TSA certificate:
 
 ```bash
 openssl x509 -req -in "$REMOTESIGN_LAB_TSA_DIR/tsa.csr" \
@@ -51,12 +51,12 @@ openssl x509 -req -in "$REMOTESIGN_LAB_TSA_DIR/tsa.csr" \
 printf '01\n' > "$REMOTESIGN_LAB_TSA_DIR/tsaserial"
 ```
 
-L'EKU `timeStamping` doit être critique et dédiée. Ne jamais employer le
-certificat `RemoteSignLab Development Signer` ni une clé SoftHSM pour cette TSA.
+The `timeStamping` EKU must be critical and dedicated. Never use the
+`RemoteSignLab Development Signer` certificate or a SoftHSM key for this TSA.
 
-## 2. Configuration OpenSSL
+## 2. OpenSSL configuration
 
-Le fichier public `scripts/dev-tsa-openssl.cnf` contient :
+The public `scripts/dev-tsa-openssl.cnf` file contains:
 
 ```ini
 [ tsa ]
@@ -81,10 +81,10 @@ ess_cert_id_chain = yes
 ess_cert_id_alg = sha256
 ```
 
-## 3. Démarrer le transport HTTP local
+## 3. Start the local HTTP transport
 
-Depuis la racine du projet, en conservant `REMOTESIGN_LAB_TSA_DIR` dans
-l'environnement :
+From the project root, with `REMOTESIGN_LAB_TSA_DIR` still in the
+environment:
 
 ```bash
 .venv/bin/python -m scripts.dev_tsa_server \
@@ -92,18 +92,18 @@ l'environnement :
   --bind 127.0.0.1 --port 8090
 ```
 
-Le script limite la taille des requêtes, n'en journalise pas le contenu et
-délègue la production du token à `openssl ts -reply`. Le serveur est local et
-mono-processus afin de sérialiser la mise à jour du numéro de série OpenSSL.
+The script limits request sizes, does not log request content, and delegates
+token generation to `openssl ts -reply`. The server is local and
+single-process so that updates to the OpenSSL serial number are serialized.
 
-Copier uniquement l'ancre publique dans le répertoire public ignoré `certs/` :
+Copy only the public trust anchor to the ignored public `certs/` directory:
 
 ```bash
 cp "$REMOTESIGN_LAB_TSA_DIR/tsa-ca.crt" \
   certs/remotesign-lab-development-tsa-ca.crt
 ```
 
-Configurer localement `.env` sans versionner de secret :
+Configure `.env` locally without committing any secret:
 
 ```dotenv
 PADES_PROFILE=PAdES-B-T
@@ -112,7 +112,7 @@ TSA_CA_CERTIFICATE=certs/remotesign-lab-development-tsa-ca.crt
 TSA_TIMEOUT_SECONDS=5
 ```
 
-## 4. Vérifier une réponse RFC 3161 isolée
+## 4. Verify a standalone RFC 3161 response
 
 ```bash
 printf 'remotesign-lab-tsa-test' > /tmp/remotesign-lab-tsa-test.bin
@@ -130,8 +130,8 @@ openssl ts -verify \
   -CAfile "$REMOTESIGN_LAB_TSA_DIR/tsa-ca.crt"
 ```
 
-Pour valider le PDF B-T complet, utiliser ensuite la commande à deux ancres
-documentée dans `docs/pades.md`.
+To validate the complete B-T PDF, then use the command with two trust anchors
+documented in `docs/pades.md`.
 
-Cette TSA est exclusivement destinée au développement. Sa clé privée et la
-clé privée de sa CA ne doivent jamais entrer dans le dépôt.
+This TSA is strictly for development. Its private key and its CA private key
+must never enter the repository.

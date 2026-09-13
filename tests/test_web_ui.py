@@ -389,14 +389,14 @@ class WebAssetTests(unittest.TestCase):
         )
 
         for label in (
-            "Document sélectionné",
-            "Upload en cours",
-            "Document prêt",
-            "Attente d’authentification",
-            "Authentification réussie",
-            "Signature réussie",
-            "Signature refusée",
-            "En attente d’une demande de signature depuis l’espace utilisateur.",
+            "Document selected",
+            "Upload in progress",
+            "Document ready",
+            "Waiting for authentication",
+            "Authentication successful",
+            "Signature successful",
+            "Signature denied",
+            "Waiting for a signature request from the user area.",
         ):
             self.assertIn(label, index + javascript)
 
@@ -429,7 +429,7 @@ class WebAssetTests(unittest.TestCase):
         )
 
         for forbidden in (
-            "Demander la signature",
+            "Request signature",
             "signature-button",
             "requestSignature",
             'apiFetch("/ui/api/signature-requests"',
@@ -561,24 +561,24 @@ class SignatureRequestTests(unittest.TestCase):
     def test_admin_uses_the_same_explicit_queue_messages(self) -> None:
         expected = {
             SignatureRequestStatus.PENDING: (
-                "Demande créée par l'utilisateur. "
-                "En attente d'authentification forte."
+                "Request created by the user. "
+                "Waiting for strong authentication."
             ),
             SignatureRequestStatus.CLAIMED: (
-                "Demande récupérée par le terminal."
+                "Request retrieved by the device."
             ),
             SignatureRequestStatus.AUTHENTICATING: (
-                "Authentification forte en cours."
+                "Strong authentication in progress."
             ),
             SignatureRequestStatus.AUTHENTICATED: (
-                "Identité vérifiée. Signature cryptographique en cours."
+                "Identity verified. Cryptographic signing in progress."
             ),
             SignatureRequestStatus.SIGNED: (
-                "Signature réussie."
+                "Signature successful."
             ),
-            SignatureRequestStatus.FAILED: "Signature refusée.",
+            SignatureRequestStatus.FAILED: "Signature denied.",
             SignatureRequestStatus.EXPIRED: (
-                "Demande expirée."
+                "Request expired."
             ),
         }
 
@@ -779,7 +779,7 @@ class SignatureRequestTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(payload["document_id"], str(document_id))
         self.assertEqual(payload["user_id"], str(user.id))
-        self.assertIn("Document attribué", payload["message"])
+        self.assertIn("Document assigned", payload["message"])
         self.assertNotIn("request_id", payload)
         self.assertNotIn("consented_at", payload)
         self.assertNotIn("consent_version", payload)

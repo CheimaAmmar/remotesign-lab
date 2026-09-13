@@ -156,7 +156,7 @@ def verify_signature(
         )
 
     # ==================================================
-    # ALGORITHME
+    # ALGORITHM
     # ==================================================
 
     if (
@@ -171,7 +171,7 @@ def verify_signature(
         )
 
     # ==================================================
-    # DOCUMENT POSTGRESQL
+    # POSTGRESQL DOCUMENT
     # ==================================================
 
     document = database.get(
@@ -198,7 +198,7 @@ def verify_signature(
     )
 
     # ==================================================
-    # DOCUMENT SUR DISQUE
+    # DOCUMENT ON DISK
     # ==================================================
 
     document_path = (
@@ -215,7 +215,7 @@ def verify_signature(
         )
 
     # ==================================================
-    # RECALCUL SHA-256
+    # SHA-256 RECALCULATION
     # ==================================================
 
     sha256 = hashlib.sha256()
@@ -252,7 +252,7 @@ def verify_signature(
     )
 
     # ==================================================
-    # INTEGRITE DOCUMENT
+    # DOCUMENT INTEGRITY
     # ==================================================
 
     if (
@@ -356,7 +356,7 @@ def verify_signature(
         }
 
     # ==================================================
-    # CLE PUBLIQUE SOFTHSM
+    # SOFTHSM PUBLIC KEY
     # ==================================================
 
     try:
@@ -394,7 +394,7 @@ def verify_signature(
         ) from error
 
     # ==================================================
-    # DIGEST DU VRAI PDF
+    # ACTUAL PDF DIGEST
     # ==================================================
 
     document_digest = bytes.fromhex(
@@ -402,7 +402,7 @@ def verify_signature(
     )
 
     # ==================================================
-    # VERIFICATION CRYPTOGRAPHIQUE
+    # CRYPTOGRAPHIC VERIFICATION
     # ==================================================
 
     try:
@@ -449,7 +449,7 @@ def verify_signature(
         }
 
     # ==================================================
-    # VERIFICATION PADES (NOUVELLES SIGNATURES)
+    # PADES VERIFICATION (NEW SIGNATURES)
     # ==================================================
 
     pades_details = {}
@@ -629,7 +629,7 @@ def verify_signature(
             }
 
     # ==================================================
-    # SIGNATURE VALIDE
+    # VALID SIGNATURE
     # ==================================================
 
     _record_verification_event(

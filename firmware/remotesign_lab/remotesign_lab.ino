@@ -48,11 +48,11 @@
 const char* DEVICE_UID =
   "ESP32-001";
 
-// Secret HMAC : 64 caractères HEX
+// HMAC secret: 64 hexadecimal characters
 
 
 // ======================================================
-// SERVEUR HTTPS
+// HTTPS SERVER
 // ======================================================
 
 const char* SERVER_BASE =
@@ -71,7 +71,7 @@ const char* SIGN_PATH =
   "/api/v1/sign";
 
 // ======================================================
-// FILE D'ATTENTE ET TEMPORISATIONS
+// QUEUE AND TIMING
 // ======================================================
 
 constexpr unsigned long POLL_INTERVAL_MS = 3000;
@@ -80,7 +80,7 @@ constexpr unsigned long RFID_TIMEOUT_MS = 60000;
 constexpr unsigned long FINGERPRINT_TIMEOUT_MS = 60000;
 
 // ======================================================
-// MODE D'AUTHENTIFICATION
+// AUTHENTICATION MODE
 // ======================================================
 
 constexpr bool SIMULATE_AUTH_FACTORS = true;
@@ -93,18 +93,18 @@ constexpr int SIMULATED_FINGERPRINT_ID = 1;
 static_assert(
   SIMULATE_AUTH_FACTORS
   || REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE,
-  "Installer MFRC522 et Adafruit Fingerprint pour le mode reel"
+  "Install MFRC522 and Adafruit Fingerprint for real hardware mode"
 );
 
 // ======================================================
-// RC522 - CABLAGE A COMPLETER AVANT UTILISATION
+// RC522 - WIRING TO COMPLETE BEFORE USE
 // ======================================================
 
 #if REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE
 
-// -1 est une sentinelle volontaire : ce n'est pas un choix de GPIO.
-// Le firmware refuse de demarrer le workflow tant que ces cinq valeurs
-// n'ont pas ete remplacees par le cablage reel.
+// -1 is an intentional sentinel: it is not a GPIO selection.
+// The firmware refuses to start the workflow until these five values
+// have been replaced with the actual wiring.
 constexpr int RC522_SCK_PIN = -1;
 constexpr int RC522_MOSI_PIN = -1;
 constexpr int RC522_MISO_PIN = -1;
@@ -112,7 +112,7 @@ constexpr int RC522_SS_PIN = -1;
 constexpr int RC522_RST_PIN = -1;
 
 // ======================================================
-// DY50 - UART DU PROTOTYPE PRECEDENT
+// DY50 - UART FROM THE PREVIOUS PROTOTYPE
 // ======================================================
 
 constexpr int FP_RX_PIN = 1;
@@ -127,7 +127,7 @@ Adafruit_Fingerprint finger(&fingerprintSerial);
 
 
 // ======================================================
-// TYPES ET ETAT DU WORKFLOW
+// WORKFLOW TYPES AND STATE
 // ======================================================
 
 struct SignatureRequest {
@@ -196,7 +196,7 @@ unsigned long lastFingerprintPollAt = 0;
 
 
 // ======================================================
-// VALIDATION ET NORMALISATION
+// VALIDATION AND NORMALIZATION
 // ======================================================
 
 bool isHexCharacter(char value) {
@@ -330,7 +330,7 @@ bool actionDue() {
 
 
 // ======================================================
-// SECRET HEX -> OCTETS
+// HEX SECRET -> BYTES
 // ======================================================
 
 int hexNibble(char value) {
@@ -379,7 +379,7 @@ bool hexToBytes(
 
 
 // ======================================================
-// NONCE ALEATOIRE 128 BITS
+// RANDOM 128-BIT NONCE
 // ======================================================
 
 String generateNonce() {
@@ -414,7 +414,7 @@ String calculateHMAC(const String& message) {
       sizeof(secretBytes)
     )
   ) {
-    Serial.println("ERREUR : DEVICE_SECRET invalide");
+    Serial.println("ERROR: invalid DEVICE_SECRET");
     return "";
   }
 
@@ -423,7 +423,7 @@ String calculateHMAC(const String& message) {
 
   if (info == nullptr) {
     memset(secretBytes, 0, sizeof(secretBytes));
-    Serial.println("ERREUR : SHA-256 indisponible");
+    Serial.println("ERROR: SHA-256 unavailable");
     return "";
   }
 
@@ -443,7 +443,7 @@ String calculateHMAC(const String& message) {
   memset(secretBytes, 0, sizeof(secretBytes));
 
   if (status != 0) {
-    Serial.println("ERREUR : calcul HMAC impossible");
+    Serial.println("ERROR: unable to calculate HMAC");
     return "";
   }
 
@@ -464,7 +464,7 @@ String calculateHMAC(const String& message) {
 
 
 // ======================================================
-// WIFI ET NTP
+// WI-FI AND NTP
 // ======================================================
 
 bool connectWiFi() {
@@ -473,7 +473,7 @@ bool connectWiFi() {
   }
 
   Serial.println();
-  Serial.println("Connexion Wi-Fi...");
+  Serial.println("Connecting to Wi-Fi...");
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -488,11 +488,11 @@ bool connectWiFi() {
   }
 
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Wi-Fi indisponible");
+    Serial.println("Wi-Fi unavailable");
     return false;
   }
 
-  Serial.println("Wi-Fi connecte");
+  Serial.println("Wi-Fi connected");
   return true;
 }
 
@@ -501,7 +501,7 @@ bool syncTime() {
     return true;
   }
 
-  Serial.println("Synchronisation NTP...");
+  Serial.println("Synchronizing NTP...");
 
   configTime(
     0,
@@ -521,11 +521,11 @@ bool syncTime() {
   }
 
   if (time(nullptr) < 1700000000) {
-    Serial.println("NTP indisponible");
+    Serial.println("NTP unavailable");
     return false;
   }
 
-  Serial.println("NTP synchronise");
+  Serial.println("NTP synchronized");
   return true;
 }
 
@@ -546,7 +546,7 @@ bool testServerConnection() {
 
   if (!http.begin(secureClient, url)) {
     http.end();
-    Serial.println("Initialisation HTTPS impossible");
+    Serial.println("Unable to initialize HTTPS");
     return false;
   }
 
@@ -555,18 +555,18 @@ bool testServerConnection() {
   http.end();
 
   if (httpCode == 200) {
-    Serial.println("Serveur HTTPS accessible");
+    Serial.println("HTTPS server reachable");
     return true;
   }
 
-  Serial.print("Serveur HTTPS temporairement indisponible : ");
+  Serial.print("HTTPS server temporarily unavailable: ");
   Serial.println(httpCode);
   return false;
 }
 
 
 // ======================================================
-// INITIALISATION RC522
+// RC522 INITIALIZATION
 // ======================================================
 
 #if REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE
@@ -585,15 +585,15 @@ bool rc522PinsConfigured() {
 
 bool initializeRFID() {
   if (SIMULATE_AUTH_FACTORS) {
-    Serial.println("RFID en mode simulation");
+    Serial.println("RFID in simulation mode");
     return true;
   }
 
 #if REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE
   if (!rc522PinsConfigured()) {
     Serial.println();
-    Serial.println("RC522 non configure.");
-    Serial.println("Renseigner SCK, MOSI, MISO, SS/SDA et RST.");
+    Serial.println("RC522 not configured.");
+    Serial.println("Set SCK, MOSI, MISO, SS/SDA, and RST.");
     return false;
   }
 
@@ -615,14 +615,14 @@ bool initializeRFID() {
     rfidReader.PCD_ReadRegister(MFRC522::VersionReg);
 
   if (version == 0x00 || version == 0xFF) {
-    Serial.println("RC522 non detecte");
+    Serial.println("RC522 not detected");
     return false;
   }
 
-  Serial.println("RC522 initialise");
+  Serial.println("RC522 initialized");
   return true;
 #else
-  Serial.println("Bibliotheque MFRC522 indisponible");
+  Serial.println("MFRC522 library unavailable");
   return false;
 #endif
 }
@@ -630,8 +630,8 @@ bool initializeRFID() {
 bool readRFID(String& uid) {
   if (SIMULATE_AUTH_FACTORS) {
     uid = SIMULATED_RFID_UID;
-    Serial.println("RFID SIMULE");
-    Serial.print("UID : ");
+    Serial.println("SIMULATED RFID");
+    Serial.print("UID: ");
     Serial.println(uid);
     return true;
   }
@@ -680,12 +680,12 @@ bool readRFID(String& uid) {
 
 
 // ======================================================
-// INITIALISATION ET RECONNAISSANCE DY50
+// DY50 INITIALIZATION AND RECOGNITION
 // ======================================================
 
 bool initializeFingerprint() {
   if (SIMULATE_AUTH_FACTORS) {
-    Serial.println("DY50 en mode simulation");
+    Serial.println("DY50 in simulation mode");
     return true;
   }
 
@@ -700,28 +700,28 @@ bool initializeFingerprint() {
   delay(1000);
 
   if (!finger.verifyPassword()) {
-    Serial.println("DY50 non detecte ou mot de passe invalide");
+    Serial.println("DY50 not detected or password invalid");
     return false;
   }
 
-  Serial.println("DY50 initialise");
+  Serial.println("DY50 initialized");
 
   if (finger.getTemplateCount() == FINGERPRINT_OK) {
-    Serial.print("Empreintes enregistrees : ");
+    Serial.print("Stored fingerprints: ");
     Serial.println(finger.templateCount);
   }
 
   return true;
 #else
-  Serial.println("Bibliotheque Adafruit Fingerprint indisponible");
+  Serial.println("Adafruit Fingerprint library unavailable");
   return false;
 #endif
 }
 
 int recognizeFingerprint() {
   if (SIMULATE_AUTH_FACTORS) {
-    Serial.println("DY50 SIMULE");
-    Serial.print("Fingerprint ID : ");
+    Serial.println("SIMULATED DY50");
+    Serial.print("Fingerprint ID: ");
     Serial.println(SIMULATED_FINGERPRINT_ID);
     return SIMULATED_FINGERPRINT_ID;
   }
@@ -744,7 +744,7 @@ int recognizeFingerprint() {
   result = finger.image2Tz();
 
   if (result != FINGERPRINT_OK) {
-    Serial.println("Empreinte illisible, recommencez");
+    Serial.println("Unreadable fingerprint, try again");
     return FINGERPRINT_RETRY_SAMPLE;
   }
 
@@ -755,7 +755,7 @@ int recognizeFingerprint() {
   }
 
   if (result == FINGERPRINT_NOTFOUND) {
-    Serial.println("Empreinte non reconnue");
+    Serial.println("Fingerprint not recognized");
     return FINGERPRINT_RETRY_SAMPLE;
   }
 
@@ -821,23 +821,23 @@ FetchResult fetchNextSignatureRequest(
 
   if (httpCode == 204) {
     http.end();
-    Serial.println("Aucune demande");
+    Serial.println("No request");
     return FetchResult::NO_REQUEST;
   }
 
   if (httpCode < 0) {
-    Serial.print("Erreur reseau /next : ");
+    Serial.print("Network error on /next: ");
     Serial.println(HTTPClient::errorToString(httpCode));
     http.end();
     return FetchResult::RETRY_LATER;
   }
 
   if (httpCode != 200) {
-    Serial.print("HTTP /next : ");
+    Serial.print("HTTP /next: ");
     Serial.println(httpCode);
 
     if (httpCode == 401 || httpCode == 403) {
-      Serial.println("Authentification device refusee");
+      Serial.println("Device authentication denied");
     }
 
     http.end();
@@ -853,7 +853,7 @@ FetchResult fetchNextSignatureRequest(
     deserializeJson(document, response);
 
   if (error) {
-    Serial.println("Reponse JSON /next invalide");
+    Serial.println("Invalid JSON response from /next");
     return FetchResult::RETRY_LATER;
   }
 
@@ -867,7 +867,7 @@ FetchResult fetchNextSignatureRequest(
     document["decision"].as<String>();
 
   if (!validateSignatureRequest(request)) {
-    Serial.println("Donnees /next invalides");
+    Serial.println("Invalid data from /next");
     request.clear();
     return FetchResult::RETRY_LATER;
   }
@@ -895,7 +895,7 @@ StepResult requestChallenge(
   );
   const String nonce = generateNonce();
 
-  // Aucun request_id ni device UID dans ce canonical.
+  // No request_id or device UID in this canonical payload.
   const String canonical =
     String("POST")
     + "\n" + CHALLENGE_PATH
@@ -936,7 +936,7 @@ StepResult requestChallenge(
 
   const int httpCode = http.POST("");
 
-  Serial.print("HTTP challenge : ");
+  Serial.print("HTTP challenge: ");
   Serial.println(httpCode);
 
   if (httpCode < 0) {
@@ -1023,7 +1023,7 @@ StepResult completeAuthentication(
   const String fingerprintString =
     String(fingerprintId);
 
-  // Aucun request_id ni device UID dans ce canonical.
+  // No request_id or device UID in this canonical payload.
   const String canonical =
     String("POST")
     + "\n" + COMPLETE_PATH
@@ -1070,7 +1070,7 @@ StepResult completeAuthentication(
 
   const int httpCode = http.POST("");
 
-  Serial.print("HTTP complete : ");
+  Serial.print("HTTP complete: ");
   Serial.println(httpCode);
 
   if (httpCode < 0) {
@@ -1127,7 +1127,7 @@ StepResult signDocument(
   );
   const String nonce = generateNonce();
 
-  // Aucun request_id ni device UID dans ce canonical.
+  // No request_id or device UID in this canonical payload.
   const String canonical =
     String("POST")
     + "\n" + SIGN_PATH
@@ -1167,7 +1167,7 @@ StepResult signDocument(
 
   const int httpCode = http.POST("");
 
-  Serial.print("HTTP sign : ");
+  Serial.print("HTTP sign: ");
   Serial.println(httpCode);
 
   if (httpCode < 0) {
@@ -1185,8 +1185,8 @@ StepResult signDocument(
     );
   }
 
-  // Ne conserve en RAM que les trois champs utiles. Le champ potentiellement
-  // volumineux signature_base64 est ignore pendant le parsing du flux HTTP.
+  // Keep only the three useful fields in RAM. The potentially large
+  // signature_base64 field is ignored while parsing the HTTP stream.
   JsonDocument filter;
   filter["signed"] = true;
   filter["signature_id"] = true;
@@ -1256,7 +1256,7 @@ StepResult reportRequestFailure(
     + requestId
     + "/status";
 
-  // Le segment /status fait partie du canonical.
+  // The /status segment is part of the canonical payload.
   const String canonical =
     String("POST")
     + "\n" + path
@@ -1299,7 +1299,7 @@ StepResult reportRequestFailure(
 
   const int httpCode = http.POST(body);
 
-  Serial.print("HTTP status FAILED : ");
+  Serial.print("HTTP status FAILED: ");
   Serial.println(httpCode);
 
   http.end();
@@ -1317,7 +1317,7 @@ StepResult reportRequestFailure(
 
 
 // ======================================================
-// MACHINE D'ETAT
+// STATE MACHINE
 // ======================================================
 
 void enterState(WorkflowState newState) {
@@ -1343,31 +1343,31 @@ void clearWorkflow() {
 void beginDefinitiveFailure(const String& failureCode) {
   pendingFailureCode = failureCode;
   Serial.println();
-  Serial.println("Echec definitif du workflow");
+  Serial.println("Definitive workflow failure");
   enterState(WorkflowState::REPORT_FAILED);
 }
 
 void printNewRequest() {
   Serial.println();
   Serial.println("================================");
-  Serial.println(" NOUVELLE DEMANDE");
+  Serial.println(" NEW REQUEST");
   Serial.println("================================");
-  Serial.print("Request ID : ");
+  Serial.print("Request ID: ");
   Serial.println(currentRequest.requestId);
-  Serial.print("Document ID : ");
+  Serial.print("Document ID: ");
   Serial.println(currentRequest.documentId);
-  Serial.print("SHA-256 : ");
+  Serial.print("SHA-256: ");
   Serial.println(currentRequest.documentHash);
-  Serial.print("Decision : ");
+  Serial.print("Decision: ");
   Serial.println(currentRequest.decision);
   Serial.println();
 
   if (SIMULATE_AUTH_FACTORS) {
     Serial.println("================================");
-    Serial.println(" AUTHENTIFICATION SIMULEE");
+    Serial.println(" SIMULATED AUTHENTICATION");
     Serial.println("================================");
   } else {
-    Serial.println("Presentez votre carte RFID...");
+    Serial.println("Present your RFID card...");
   }
 }
 
@@ -1402,7 +1402,7 @@ void processWorkflow() {
 
       if (readRFID(currentRfidUid)) {
         if (!SIMULATE_AUTH_FACTORS) {
-          Serial.print("RFID lu : ");
+          Serial.print("RFID read: ");
           Serial.println(currentRfidUid);
         }
         enterState(WorkflowState::CHALLENGE);
@@ -1422,11 +1422,11 @@ void processWorkflow() {
       );
 
       if (result == StepResult::SUCCESS) {
-        Serial.println("RFID accepte");
+        Serial.println("RFID accepted");
 
         if (!SIMULATE_AUTH_FACTORS) {
           Serial.println();
-          Serial.println("Placez votre doigt...");
+          Serial.println("Place your finger...");
         }
 
         lastFingerprintPollAt = 0;
@@ -1434,7 +1434,7 @@ void processWorkflow() {
       } else if (
         result == StepResult::TEMPORARY_ERROR
       ) {
-        Serial.println("Challenge temporairement indisponible, retry");
+        Serial.println("Challenge temporarily unavailable, retrying");
         nextActionAt = millis() + RETRY_INTERVAL_MS;
       } else {
         beginDefinitiveFailure("CHALLENGE_REJECTED");
@@ -1467,8 +1467,8 @@ void processWorkflow() {
 
       if (currentFingerprintId > 0) {
         if (!SIMULATE_AUTH_FACTORS) {
-          Serial.println("Empreinte reconnue");
-          Serial.print("Fingerprint ID : ");
+          Serial.println("Fingerprint recognized");
+          Serial.print("Fingerprint ID: ");
           Serial.println(currentFingerprintId);
         }
         enterState(WorkflowState::COMPLETE_AUTH);
@@ -1476,7 +1476,7 @@ void processWorkflow() {
         currentFingerprintId
         == FINGERPRINT_SENSOR_ERROR
       ) {
-        Serial.println("Erreur temporaire DY50");
+        Serial.println("Temporary DY50 error");
       }
       break;
 
@@ -1496,14 +1496,14 @@ void processWorkflow() {
       if (result == StepResult::SUCCESS) {
         Serial.println();
         Serial.println("================================");
-        Serial.println(" AUTHENTIFICATION FORTE OK");
+        Serial.println(" STRONG AUTHENTICATION OK");
         Serial.println("================================");
-        Serial.println("Signature distante en cours...");
+        Serial.println("Remote signing in progress...");
         enterState(WorkflowState::SIGN_DOCUMENT);
       } else if (
         result == StepResult::TEMPORARY_ERROR
       ) {
-        Serial.println("Complete temporairement indisponible, retry");
+        Serial.println("Complete temporarily unavailable, retrying");
         nextActionAt = millis() + RETRY_INTERVAL_MS;
       } else {
         beginDefinitiveFailure("AUTHENTICATION_REJECTED");
@@ -1528,7 +1528,7 @@ void processWorkflow() {
       } else if (
         result == StepResult::TEMPORARY_ERROR
       ) {
-        Serial.println("Signature temporairement indisponible, retry");
+        Serial.println("Signing temporarily unavailable, retrying");
         nextActionAt = millis() + RETRY_INTERVAL_MS;
       } else {
         beginDefinitiveFailure("SIGNATURE_REJECTED");
@@ -1547,10 +1547,10 @@ void processWorkflow() {
       );
 
       if (result == StepResult::TEMPORARY_ERROR) {
-        Serial.println("Report FAILED temporairement indisponible, retry");
+        Serial.println("FAILED report temporarily unavailable, retrying");
         nextActionAt = millis() + RETRY_INTERVAL_MS;
       } else {
-        Serial.println("Workflow termine en echec");
+        Serial.println("Workflow ended in failure");
         clearWorkflow();
       }
       break;
@@ -1559,16 +1559,16 @@ void processWorkflow() {
     case WorkflowState::SUCCESS:
       Serial.println();
       Serial.println("================================");
-      Serial.println(" DOCUMENT SIGNE");
+      Serial.println(" DOCUMENT SIGNED");
       Serial.println("================================");
 
       if (completedSignatureId.length() > 0) {
-        Serial.print("Signature ID : ");
+        Serial.print("Signature ID: ");
         Serial.println(completedSignatureId);
       }
 
       if (completedAlgorithm.length() > 0) {
-        Serial.print("Algorithme : ");
+        Serial.print("Algorithm: ");
         Serial.println(completedAlgorithm);
       }
 
@@ -1579,7 +1579,7 @@ void processWorkflow() {
 
 
 // ======================================================
-// SETUP ET LOOP
+// SETUP AND LOOP
 // ======================================================
 
 void setup() {
@@ -1607,12 +1607,12 @@ void setup() {
 
   if (!hardwareReady) {
     Serial.println();
-    Serial.println("Workflow suspendu : configuration materielle incomplete.");
-    Serial.println("Aucune demande ne sera reclamee tant que le RC522 et le DY50");
-    Serial.println("ne seront pas tous deux initialises.");
+    Serial.println("Workflow suspended: incomplete hardware configuration.");
+    Serial.println("No request will be claimed until both the RC522 and DY50");
+    Serial.println("have been initialized.");
   } else {
     Serial.println();
-    Serial.println("Systeme pret - polling automatique");
+    Serial.println("System ready - automatic polling");
   }
 
   lastPollAt = millis() - POLL_INTERVAL_MS;

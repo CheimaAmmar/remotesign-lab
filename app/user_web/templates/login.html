@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>Connexion utilisateur | RemoteSignLab</title>
+  <title>User sign-in | RemoteSignLab</title>
   <link rel="stylesheet" href="/ui/static/styles.css">
   <link rel="stylesheet" href="/user/static/user.css">
   <script src="/user/static/login.js" defer></script>
@@ -16,33 +16,33 @@
         <span class="brand-mark" aria-hidden="true">RL</span>
         <span>
           <strong>RemoteSignLab</strong>
-          <small>Espace utilisateur</small>
+          <small>User area</small>
         </span>
       </div>
 
       <div class="login-heading">
-        <p class="eyebrow">Signature distante</p>
-        <h1 id="login-title">Se connecter</h1>
-        <p>Consultez vos documents et donnez votre consentement avant l’authentification forte.</p>
+        <p class="eyebrow">Remote signing</p>
+        <h1 id="login-title">Sign in</h1>
+        <p>Review your documents and give your consent before strong authentication.</p>
       </div>
 
       <div id="login-feedback" class="alert alert-error" role="alert" aria-live="assertive" hidden></div>
 
       <form class="login-form" action="/user/login" method="post">
         <div class="field">
-          <label for="email">Adresse e-mail</label>
+          <label for="email">Email address</label>
           <input id="email" name="email" type="email" autocomplete="username" maxlength="320" required autofocus>
         </div>
 
         <div class="field">
-          <label for="password">Mot de passe</label>
+          <label for="password">Password</label>
           <input id="password" name="password" type="password" autocomplete="current-password" maxlength="128" required>
         </div>
 
-        <button class="button button-primary button-wide" type="submit">Ouvrir mon espace</button>
+        <button class="button button-primary button-wide" type="submit">Open my account</button>
       </form>
 
-      <p class="login-footnote">Cet accès est distinct de l’interface administrateur.</p>
+      <p class="login-footnote">This access is separate from the administrator interface.</p>
     </section>
   </main>
 </body>

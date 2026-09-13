@@ -12,32 +12,32 @@ const STATES = Object.freeze({
 
 const STATE_COPY = Object.freeze({
   [STATES.DOCUMENT_SELECTED]: {
-    title: "Document sélectionné",
-    message: "Le PDF peut maintenant être envoyé au serveur.",
+    title: "Document selected",
+    message: "The PDF can now be sent to the server.",
   },
   [STATES.UPLOADING]: {
-    title: "Upload en cours",
-    message: "Le document est transféré et son empreinte est calculée.",
+    title: "Upload in progress",
+    message: "The document is being transferred and its hash is being calculated.",
   },
   [STATES.DOCUMENT_READY]: {
-    title: "Document prêt",
-    message: "En attente d’une demande de signature depuis l’espace utilisateur.",
+    title: "Document ready",
+    message: "Waiting for a signature request from the user area.",
   },
   [STATES.WAITING_AUTHENTICATION]: {
-    title: "Attente d’authentification",
-    message: "Demande créée par l’utilisateur. En attente d’authentification forte.",
+    title: "Waiting for authentication",
+    message: "Request created by the user. Waiting for strong authentication.",
   },
   [STATES.AUTHENTICATION_SUCCEEDED]: {
-    title: "Authentification réussie",
-    message: "L’identité a été validée. La signature est en cours.",
+    title: "Authentication successful",
+    message: "The identity has been verified. Signing is in progress.",
   },
   [STATES.SIGNATURE_SUCCEEDED]: {
-    title: "Signature réussie",
-    message: "Signature réussie.",
+    title: "Signature successful",
+    message: "Signature successful.",
   },
   [STATES.SIGNATURE_REFUSED]: {
-    title: "Signature refusée",
-    message: "La demande de signature n’a pas été autorisée.",
+    title: "Signature denied",
+    message: "The signature request was not authorized.",
   },
 });
 
@@ -58,13 +58,13 @@ const REQUEST_TO_UI_STATE = Object.freeze({
 });
 
 const REQUEST_STATE_MESSAGES = Object.freeze({
-  PENDING: "Demande créée par l’utilisateur. En attente d’authentification forte.",
-  CLAIMED: "Demande récupérée par le terminal.",
-  AUTHENTICATING: "Authentification forte en cours.",
-  AUTHENTICATED: "Identité vérifiée. Signature cryptographique en cours.",
-  SIGNED: "Signature réussie.",
-  FAILED: "Signature refusée.",
-  EXPIRED: "Demande expirée.",
+  PENDING: "Request created by the user. Waiting for strong authentication.",
+  CLAIMED: "Request retrieved by the device.",
+  AUTHENTICATING: "Strong authentication in progress.",
+  AUTHENTICATED: "Identity verified. Cryptographic signing in progress.",
+  SIGNED: "Signature successful.",
+  FAILED: "Signature denied.",
+  EXPIRED: "Request expired.",
 });
 
 const POLL_DELAY_MS = 1500;
@@ -122,10 +122,10 @@ function formatBytes(value) {
   }
 
   if (value < 1024) {
-    return `${value} octet${value > 1 ? "s" : ""}`;
+    return `${value} byte${value === 1 ? "" : "s"}`;
   }
 
-  const units = ["Kio", "Mio", "Gio"];
+  const units = ["KiB", "MiB", "GiB"];
   let amount = value / 1024;
   let unitIndex = 0;
 
@@ -134,7 +134,7 @@ function formatBytes(value) {
     unitIndex += 1;
   }
 
-  return `${amount.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} ${units[unitIndex]}`;
+  return `${amount.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${units[unitIndex]}`;
 }
 
 function showAlert(message, kind = "error") {
@@ -211,7 +211,7 @@ function resetDocument() {
 }
 
 function isPdf(file) {
-  return Boolean(file && file.name.toLocaleLowerCase("fr-FR").endsWith(".pdf"));
+  return Boolean(file && file.name.toLocaleLowerCase("en-US").endsWith(".pdf"));
 }
 
 function errorMessage(payload, fallback) {
@@ -263,7 +263,7 @@ async function apiFetch(url, options = {}) {
 
 function displayDocument(documentData) {
   elements.documentFilename.textContent = String(documentData.filename);
-  elements.documentSize.textContent = `${formatBytes(Number(documentData.size_bytes))} (${documentData.size_bytes} octets)`;
+  elements.documentSize.textContent = `${formatBytes(Number(documentData.size_bytes))} (${documentData.size_bytes} bytes)`;
   elements.documentId.textContent = String(documentData.document_id);
   elements.documentHash.textContent = String(documentData.document_hash);
   elements.documentPanel.hidden = false;
@@ -305,14 +305,14 @@ async function restoreDocumentFromUrl() {
 
   if (!response.ok || !validateDocumentResponse(payload)) {
     updateSelectedDocumentUrl(null);
-    throw new Error(errorMessage(payload, "Impossible de restaurer le document sélectionné."));
+    throw new Error(errorMessage(payload, "Unable to restore the selected document."));
   }
 
   currentDocument = payload;
   displayDocument(payload);
   setState(
     STATES.DOCUMENT_READY,
-    "En attente d’une demande de signature depuis l’espace utilisateur.",
+    "Waiting for a signature request from the user area.",
   );
 
   if (typeof payload.user_id === "string") {
@@ -344,15 +344,15 @@ async function loadSession() {
     }
 
     csrfToken = payload.csrf_token;
-    elements.sessionIndicator.textContent = "Session sécurisée active";
+    elements.sessionIndicator.textContent = "Secure session active";
     elements.logoutButton.disabled = false;
     await loadAssignableUsers();
     await restoreDocumentFromUrl();
     await Promise.all([loadAuditEvents(), loadAuditIntegrity()]);
   } catch (error) {
     if (!(error instanceof SessionExpiredError)) {
-      showAlert("Impossible de vérifier la session. Vérifiez la connexion au serveur.");
-      elements.sessionIndicator.textContent = "Session indisponible";
+      showAlert("Unable to verify the session. Check the server connection.");
+      elements.sessionIndicator.textContent = "Session unavailable";
     }
   }
 }
@@ -397,7 +397,7 @@ async function showAuditDetails(eventId) {
   const payload = await readJson(response);
 
   if (!response.ok || !payload) {
-    throw new Error(errorMessage(payload, "Impossible de charger l’événement d’audit."));
+    throw new Error(errorMessage(payload, "Unable to load the audit event."));
   }
 
   elements.auditDetailsContent.textContent = JSON.stringify(payload, null, 2);
@@ -412,7 +412,7 @@ function renderAuditEvents(payload) {
 
   if (items.length === 0) {
     const row = document.createElement("tr");
-    auditCell(row, "Aucun événement pour ces filtres.");
+    auditCell(row, "No events match these filters.");
     row.firstElementChild.colSpan = 11;
     elements.auditRows.append(row);
   }
@@ -421,7 +421,7 @@ function renderAuditEvents(payload) {
     const row = document.createElement("tr");
     row.tabIndex = 0;
     row.className = "audit-row";
-    row.title = "Afficher les détails";
+    row.title = "Show details";
     const open = () => showAuditDetails(item.id).catch((error) => showAlert(error.message));
     row.addEventListener("click", open);
     row.addEventListener("keydown", (event) => {
@@ -446,7 +446,7 @@ function renderAuditEvents(payload) {
 
   const first = auditTotal === 0 ? 0 : auditOffset + 1;
   const last = Math.min(auditOffset + items.length, auditTotal);
-  elements.auditPage.textContent = `${first}–${last} sur ${auditTotal}`;
+  elements.auditPage.textContent = `${first}–${last} of ${auditTotal}`;
   elements.auditPrevious.disabled = auditOffset === 0;
   elements.auditNext.disabled = auditOffset + items.length >= auditTotal;
   const exportParameters = auditQueryParameters(false);
@@ -459,7 +459,7 @@ async function loadAuditEvents() {
   const payload = await readJson(response);
 
   if (!response.ok || !payload || !Array.isArray(payload.items)) {
-    throw new Error(errorMessage(payload, "Impossible de charger le journal d’audit."));
+    throw new Error(errorMessage(payload, "Unable to load the audit log."));
   }
 
   renderAuditEvents(payload);
@@ -470,14 +470,14 @@ async function loadAuditIntegrity() {
   const payload = await readJson(response);
 
   if (!response.ok || !payload) {
-    elements.auditIntegrity.textContent = "Vérification indisponible";
+    elements.auditIntegrity.textContent = "Verification unavailable";
     elements.auditIntegrity.className = "audit-integrity is-invalid";
     return;
   }
 
   elements.auditIntegrity.textContent = payload.valid
-    ? `Chaîne valide · ${payload.chained_events} événements scellés`
-    : `Chaîne invalide · événement ${shortIdentifier(payload.first_invalid_event_id)}`;
+    ? `Valid chain · ${payload.chained_events} sealed events`
+    : `Invalid chain · event ${shortIdentifier(payload.first_invalid_event_id)}`;
   elements.auditIntegrity.className = `audit-integrity ${payload.valid ? "is-valid" : "is-invalid"}`;
 }
 
@@ -486,7 +486,7 @@ async function loadAssignableUsers() {
   const payload = await readJson(response);
 
   if (!response.ok || !payload || !Array.isArray(payload.users)) {
-    throw new Error("Impossible de charger les utilisateurs actifs.");
+    throw new Error("Unable to load active users.");
   }
 
   for (const user of payload.users) {
@@ -494,7 +494,7 @@ async function loadAssignableUsers() {
     option.value = String(user.user_id);
     option.textContent = user.email
       ? `${user.full_name} · ${user.email}`
-      : `${user.full_name} · accès Web non configuré`;
+      : `${user.full_name} · Web access not configured`;
     elements.ownerSelect.append(option);
   }
 
@@ -503,7 +503,7 @@ async function loadAssignableUsers() {
   elements.fileInput.disabled = !hasUsers;
 
   if (!hasUsers) {
-    showAlert("Créez d’abord un utilisateur actif depuis l’API ADMIN.");
+    showAlert("Create an active user through the ADMIN API first.");
   }
 }
 
@@ -516,10 +516,10 @@ function handleFileSelection() {
     : null;
 
   if (!selectedFile) {
-    elements.fileSummary.textContent = "Aucun document sélectionné";
+    elements.fileSummary.textContent = "No document selected";
     elements.uploadButton.disabled = true;
-    elements.statusTitle.textContent = "En attente d’un document";
-    elements.statusMessage.textContent = "Choisissez un PDF pour commencer.";
+    elements.statusTitle.textContent = "Waiting for a document";
+    elements.statusMessage.textContent = "Choose a PDF to begin.";
     return;
   }
 
@@ -527,19 +527,19 @@ function handleFileSelection() {
 
   if (!isPdf(selectedFile)) {
     elements.uploadButton.disabled = true;
-    showAlert("Le fichier sélectionné doit porter l’extension .pdf.");
+    showAlert("The selected file must have a .pdf extension.");
     return;
   }
 
   if (selectedFile.size === 0) {
     elements.uploadButton.disabled = true;
-    showAlert("Le document sélectionné est vide.");
+    showAlert("The selected document is empty.");
     return;
   }
 
   if (selectedFile.size > MAX_DOCUMENT_SIZE) {
     elements.uploadButton.disabled = true;
-    showAlert("Le document dépasse la limite de 20 Mio.");
+    showAlert("The document exceeds the 20 MiB limit.");
     return;
   }
 
@@ -551,12 +551,12 @@ async function uploadDocument(event) {
   event.preventDefault();
 
   if (!selectedFile || !isPdf(selectedFile)) {
-    showAlert("Sélectionnez d’abord un fichier PDF valide.");
+    showAlert("Select a valid PDF file first.");
     return;
   }
 
   if (!elements.ownerSelect.value) {
-    showAlert("Sélectionnez le propriétaire du document.");
+    showAlert("Select the document owner.");
     return;
   }
 
@@ -578,11 +578,11 @@ async function uploadDocument(event) {
     const payload = await readJson(response);
 
     if (!response.ok) {
-      throw new Error(errorMessage(payload, "Le document n’a pas pu être uploadé."));
+      throw new Error(errorMessage(payload, "The document could not be uploaded."));
     }
 
     if (!validateDocumentResponse(payload)) {
-      throw new Error("La réponse du serveur pour ce document est incomplète.");
+      throw new Error("The server response for this document is incomplete.");
     }
 
     currentDocument = payload;
@@ -592,9 +592,9 @@ async function uploadDocument(event) {
     startDocumentPolling(payload.document_id);
   } catch (error) {
     if (!(error instanceof SessionExpiredError)) {
-      showAlert(error instanceof Error ? error.message : "L’upload a échoué.");
+      showAlert(error instanceof Error ? error.message : "The upload failed.");
       reachedStates.delete(STATES.UPLOADING);
-      setState(STATES.DOCUMENT_SELECTED, "L’upload a échoué. Vous pouvez réessayer.");
+      setState(STATES.DOCUMENT_SELECTED, "The upload failed. You can try again.");
       elements.uploadButton.disabled = false;
     }
   } finally {
@@ -637,42 +637,42 @@ function formatDateTime(value) {
     return String(value);
   }
 
-  return date.toLocaleString("fr-FR");
+  return date.toLocaleString("en-US");
 }
 
 function displayRequestMetadata(payload) {
-  const details = [`Demande : ${payload.request_id}`];
+  const details = [`Request: ${payload.request_id}`];
 
   if (typeof payload.signature_id === "string") {
-    details.push(`Signature : ${payload.signature_id}`);
+    details.push(`Signature: ${payload.signature_id}`);
   }
 
   if (typeof payload.signed_at === "string") {
-    details.push(`Date : ${formatDateTime(payload.signed_at)}`);
+    details.push(`Date: ${formatDateTime(payload.signed_at)}`);
   }
 
   if (typeof payload.algorithm === "string") {
-    details.push(`Algorithme : ${payload.algorithm}`);
+    details.push(`Algorithm: ${payload.algorithm}`);
   }
 
   if (typeof payload.pades_profile === "string") {
-    details.push(`Profil : ${payload.pades_profile}`);
+    details.push(`Profile: ${payload.pades_profile}`);
   }
 
   if (typeof payload.signer_name === "string") {
-    details.push(`Signataire : ${payload.signer_name}`);
+    details.push(`Signer: ${payload.signer_name}`);
   }
 
   if (typeof payload.certificate_subject === "string") {
-    details.push(`Certificat : ${payload.certificate_subject}`);
+    details.push(`Certificate: ${payload.certificate_subject}`);
   }
 
   if (typeof payload.timestamp_time === "string") {
-    details.push(`Horodatage : ${formatDateTime(payload.timestamp_time)}`);
+    details.push(`Timestamp: ${formatDateTime(payload.timestamp_time)}`);
   }
 
   if (typeof payload.tsa_certificate_subject === "string") {
-    details.push(`TSA : ${payload.tsa_certificate_subject}`);
+    details.push(`TSA: ${payload.tsa_certificate_subject}`);
   }
 
   elements.requestReference.textContent = details.join("\n");
@@ -703,7 +703,7 @@ async function pollDocumentSignatureRequest(documentId, generation) {
       elements.requestReference.hidden = true;
       setState(
         STATES.DOCUMENT_READY,
-        "En attente d’une demande de signature depuis l’espace utilisateur.",
+        "Waiting for a signature request from the user area.",
       );
       scheduleDocumentPoll(documentId, generation);
       return;
@@ -712,11 +712,11 @@ async function pollDocumentSignatureRequest(documentId, generation) {
     const payload = await readJson(response);
 
     if (!response.ok) {
-      throw new Error(errorMessage(payload, "Impossible de lire l’état de la demande."));
+      throw new Error(errorMessage(payload, "Unable to read the request status."));
     }
 
     if (!applyRequestState(payload)) {
-      throw new Error("Le serveur a renvoyé un état de signature inconnu.");
+      throw new Error("The server returned an unknown signature status.");
     }
 
     clearAlert();
@@ -733,7 +733,7 @@ async function pollDocumentSignatureRequest(documentId, generation) {
       return;
     }
 
-    showAlert(error instanceof Error ? error.message : "Le suivi de la demande a échoué.");
+    showAlert(error instanceof Error ? error.message : "Request tracking failed.");
     scheduleDocumentPoll(documentId, generation, TERMINAL_POLL_DELAY_MS);
   }
 }
@@ -748,14 +748,14 @@ async function logout(event) {
 
     if (!response.ok) {
       const payload = await readJson(response);
-      throw new Error(errorMessage(payload, "La déconnexion a échoué."));
+      throw new Error(errorMessage(payload, "Sign-out failed."));
     }
 
     csrfToken = "";
     window.location.replace("/ui/login");
   } catch (error) {
     if (!(error instanceof SessionExpiredError)) {
-      showAlert(error instanceof Error ? error.message : "La déconnexion a échoué.");
+      showAlert(error instanceof Error ? error.message : "Sign-out failed.");
       elements.logoutButton.disabled = false;
     }
   }

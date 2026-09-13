@@ -42,8 +42,8 @@ settings = get_settings()
 app = FastAPI(
     title=settings.app_name,
     description=(
-        "Serveur d'authentification forte "
-        "et de signature électronique distante"
+        "Strong authentication and remote "
+        "electronic-signature server"
     ),
     version=settings.app_version,
 )

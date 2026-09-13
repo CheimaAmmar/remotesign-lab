@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>Connexion | RemoteSignLab</title>
+  <title>Sign in | RemoteSignLab</title>
   <link rel="stylesheet" href="/ui/static/styles.css">
   <script src="/ui/static/login.js" defer></script>
 </head>
@@ -15,21 +15,21 @@
         <span class="brand-mark" aria-hidden="true">RL</span>
         <span>
           <strong>RemoteSignLab</strong>
-          <small>Prototype local</small>
+          <small>Local prototype</small>
         </span>
       </div>
 
       <div class="login-heading">
-        <p class="eyebrow">Accès protégé</p>
-        <h1 id="login-title">Ouvrir l’interface</h1>
-        <p>Authentifiez cette session avant de déposer un document.</p>
+        <p class="eyebrow">Protected access</p>
+        <h1 id="login-title">Open the interface</h1>
+        <p>Authenticate this session before uploading a document.</p>
       </div>
 
       <div id="login-feedback" class="alert alert-error" role="alert" aria-live="assertive" hidden></div>
 
       <form class="login-form" action="/ui/login" method="post">
         <div class="field">
-          <label for="admin-key">Clé d’accès administrateur</label>
+          <label for="admin-key">Administrator access key</label>
           <input
             id="admin-key"
             name="admin_key"
@@ -40,13 +40,13 @@
             required
             autofocus
           >
-          <p class="field-hint">La clé est envoyée au serveur par la connexion HTTPS et n’est pas enregistrée par cette page.</p>
+          <p class="field-hint">The key is sent to the server over the HTTPS connection and is not stored by this page.</p>
         </div>
 
-        <button class="button button-primary button-wide" type="submit">Ouvrir une session</button>
+        <button class="button button-primary button-wide" type="submit">Sign in</button>
       </form>
 
-      <p class="login-footnote">L’interface utilise une session locale limitée dans le temps.</p>
+      <p class="login-footnote">The interface uses a time-limited local session.</p>
     </section>
   </main>
 </body>

@@ -1,25 +1,25 @@
-# Certificat de signature PAdES de développement
+# Development PAdES signing certificate
 
-Le certificat TLS du serveur n'est pas un certificat de signature de
-documents et ne doit pas être réutilisé. La clé privée de signature reste
-dans SoftHSM pendant toute cette procédure.
+The server TLS certificate is not a document-signing certificate and must not
+be reused. The signing private key remains in SoftHSM throughout this
+procedure.
 
-## 1. Générer la CSR avec la clé SoftHSM
+## 1. Generate the CSR with the SoftHSM key
 
-Depuis la racine du projet :
+From the project root:
 
 ```bash
 .venv/bin/python -m scripts.create_hsm_signing_csr
 openssl req -in certs/remotesign-lab-signing.csr -noout -verify
 ```
 
-Le script lit uniquement la clé publique et demande au token PKCS#11 de
-signer la CSR. Il n'exporte jamais la clé privée.
+The script reads only the public key and asks the PKCS#11 token to sign the
+CSR. It never exports the private key.
 
-## 2. Créer une petite CA de test hors du serveur
+## 2. Create a small test CA outside the server
 
-Sur un poste de développement séparé, créer une CA uniquement destinée au
-prototype. Sa clé privée ne doit pas être copiée sur le serveur RemoteSignLab :
+On a separate development workstation, create a CA dedicated solely to the
+prototype. Its private key must not be copied to the RemoteSignLab server:
 
 ```bash
 openssl req -x509 -newkey rsa:3072 -sha256 -days 3650 \
@@ -28,7 +28,7 @@ openssl req -x509 -newkey rsa:3072 -sha256 -days 3650 \
   -subj "/CN=RemoteSignLab Development CA"
 ```
 
-Créer un fichier `signing-cert.ext` :
+Create a `signing-cert.ext` file:
 
 ```text
 basicConstraints=critical,CA:FALSE
@@ -37,7 +37,7 @@ subjectKeyIdentifier=hash
 authorityKeyIdentifier=keyid,issuer
 ```
 
-Signer ensuite la CSR exportée du serveur :
+Then sign the CSR exported from the server:
 
 ```bash
 openssl x509 -req \
@@ -51,29 +51,29 @@ openssl x509 -req \
   -out remotesign-lab-signing.crt
 ```
 
-## 3. Installer uniquement les certificats publics
+## 3. Install only the public certificates
 
-Copier sur le serveur :
+Copy these files to the server:
 
 ```text
 certs/remotesign-lab-signing.crt
 certs/remotesign-lab-test-ca.crt
 ```
 
-Si la chaîne comprend des intermédiaires, les placer dans le fichier de
-chaîne dans l'ordre certificat intermédiaire vers certificat racine ; la
-racine doit être le dernier certificat du fichier.
+If the chain contains intermediates, place them in the chain file in order
+from the intermediate certificate to the root certificate; the root must be
+the final certificate in the file.
 
-Ne jamais y copier `remotesign-lab-test-ca.key`. Les chemins se configurent avec
-`PADES_SIGNING_CERTIFICATE` et `PADES_CERTIFICATE_CHAIN`.
+Never copy `remotesign-lab-test-ca.key` there. Configure the paths with
+`PADES_SIGNING_CERTIFICATE` and `PADES_CERTIFICATE_CHAIN`.
 
-À chaque signature, le serveur compare la clé publique du certificat avec
-la clé publique réellement lue dans SoftHSM. Une différence bloque la
-génération PAdES avant toute écriture en base.
+For every signature, the server compares the certificate's public key with
+the public key actually read from SoftHSM. A mismatch blocks PAdES generation
+before any database write.
 
-Ce certificat est exclusivement un certificat de développement. Les PDF
-produits ne constituent pas des signatures qualifiées.
+This certificate is strictly a development certificate. The generated PDFs
+are not qualified signatures.
 
-La clé et le certificat de cette identité ne doivent pas être réutilisés pour
-la TSA. La procédure RFC 3161 distincte est décrite dans
-`docs/pades-test-tsa.md`, et l'architecture complète dans `docs/pades.md`.
+The key and certificate for this identity must not be reused for the TSA. The
+separate RFC 3161 procedure is described in `docs/pades-test-tsa.md`, and the
+complete architecture in `docs/pades.md`.
