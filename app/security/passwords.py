@@ -113,10 +113,10 @@ _DUMMY_PASSWORD_HASH = "$".join(
         str(SCRYPT_N),
         str(SCRYPT_R),
         str(SCRYPT_P),
-        (b"StageHsmDummyPwd").hex(),
+        (b"RemoteSignLabDummyPwd").hex(),
         _derive_password(
             "not-the-user-password",
-            salt=b"StageHsmDummyPwd",
+            salt=b"RemoteSignLabDummyPwd",
             n=SCRYPT_N,
             r=SCRYPT_R,
             p=SCRYPT_P,

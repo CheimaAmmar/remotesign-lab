@@ -18,7 +18,7 @@ MAX_TIMESTAMP_QUERY_BYTES = 1024 * 1024
 
 
 class TSARequestHandler(BaseHTTPRequestHandler):
-    server_version = "StageHSMDevelopmentTSA/1.0"
+    server_version = "RemoteSignLabDevelopmentTSA/1.0"
 
     def do_POST(self) -> None:  # noqa: N802 - HTTP handler API
         if self.path != "/":
@@ -48,7 +48,7 @@ class TSARequestHandler(BaseHTTPRequestHandler):
 
         try:
             with tempfile.TemporaryDirectory(
-                prefix="stage-hsm-tsa-"
+                prefix="remotesign-lab-tsa-"
             ) as directory:
                 temporary_directory = Path(directory)
                 query_path = temporary_directory / "request.tsq"

@@ -1,4 +1,4 @@
-# Journal d'audit Stage-HSM
+# Journal d'audit RemoteSignLab
 
 ## Architecture
 

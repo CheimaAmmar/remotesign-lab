@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "Stage HSM Server"
+    app_name: str = "RemoteSignLab Server"
     app_version: str = "0.1.0"
     signature_device_uid: str = "ESP32-001"
 
@@ -15,16 +15,16 @@ class Settings(BaseSettings):
     admin_api_key: SecretStr
 
     softhsm_module: str
-    softhsm_token_label: str = "STAGE-HSM"
+    softhsm_token_label: str = "REMOTESIGN-LAB"
     softhsm_key_label: str = "REMOTE-SIGNING-KEY"
     softhsm_key_id: str = "01"
     softhsm_user_pin: SecretStr
 
     pades_signing_certificate: Path = Path(
-        "certs/stage-hsm-signing.crt"
+        "certs/remotesign-lab-signing.crt"
     )
     pades_certificate_chain: Path | None = Path(
-        "certs/stage-hsm-test-ca.crt"
+        "certs/remotesign-lab-test-ca.crt"
     )
     pades_profile: str = "PAdES-B-B"
 

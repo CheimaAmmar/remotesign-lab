@@ -1,1 +1,1 @@
-"""Operational helper scripts for Stage-HSM."""
+"""Operational helper scripts for RemoteSignLab."""

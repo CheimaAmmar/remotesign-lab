@@ -46,7 +46,7 @@ from app.services.pades_service import (
     PADES_PROFILE,
     PAdESService,
     PAdESServiceError,
-    StageHSMPKCS11Signer,
+    RemoteSignLabPKCS11Signer,
 )
 from app.user_web.routes import (
     _request_response,
@@ -159,7 +159,7 @@ class DevelopmentCertificateMaterial:
             [
                 x509.NameAttribute(
                     NameOID.COMMON_NAME,
-                    "Stage-HSM Test CA",
+                    "RemoteSignLab Development CA",
                 )
             ]
         )
@@ -179,7 +179,7 @@ class DevelopmentCertificateMaterial:
                 [
                     x509.NameAttribute(
                         NameOID.COMMON_NAME,
-                        "Stage-HSM Development Signer",
+                        "RemoteSignLab Development Signer",
                     )
                 ]
             ),
@@ -271,7 +271,7 @@ class DevelopmentTSAMaterial:
             [
                 x509.NameAttribute(
                     NameOID.COMMON_NAME,
-                    "Stage-HSM Development TSA CA",
+                    "RemoteSignLab Development TSA CA",
                 )
             ]
         )
@@ -294,7 +294,7 @@ class DevelopmentTSAMaterial:
                     [
                         x509.NameAttribute(
                             NameOID.COMMON_NAME,
-                            "Stage-HSM Development TSA",
+                            "RemoteSignLab Development TSA",
                         )
                     ]
                 )
@@ -380,7 +380,7 @@ class PAdESGenerationTests(unittest.TestCase):
                 source_pdf_path=source,
                 output_pdf_path=signed,
                 signature_id=uuid.uuid4(),
-                signer_name="Stage User",
+                signer_name="Test User",
             )
             verification = material.service().verify_pdf(signed)
 
@@ -460,7 +460,7 @@ class PAdESGenerationTests(unittest.TestCase):
                     b"\\055",
                     b"-",
                 )
-                self.assertIn(b"Stage-HSM", appearance)
+                self.assertIn(b"RemoteSignLab", appearance)
                 self.assertIn(server_user_name.encode(), appearance)
                 self.assertIn(str(signature_id).encode(), appearance)
 
@@ -511,7 +511,7 @@ class PAdESGenerationTests(unittest.TestCase):
                 fixed_timestamp,
             )
             self.assertIn(
-                "Stage-HSM Development TSA",
+                "RemoteSignLab Development TSA",
                 verification.tsa_certificate_subject,
             )
             self.assertEqual(
@@ -778,7 +778,7 @@ class PAdESGenerationTests(unittest.TestCase):
                 source_pdf_path=source,
                 output_pdf_path=signed,
                 signature_id=uuid.uuid4(),
-                signer_name="Stage User",
+                signer_name="Test User",
             )
             signed_bytes = signed.read_bytes()
             marker = signed_bytes.index(b"%PDF-1.") + len(b"%PDF-1.")
@@ -820,7 +820,7 @@ class PAdESGenerationTests(unittest.TestCase):
                     source_pdf_path=source,
                     output_pdf_path=signed,
                     signature_id=uuid.uuid4(),
-                    signer_name="Stage User",
+                    signer_name="Test User",
                 )
 
             self.assertFalse(signed.exists())
@@ -838,7 +838,7 @@ class PAdESGenerationTests(unittest.TestCase):
         self.assertNotIn("ObjectClass.PRIVATE_KEY", source)
 
         raw_signing = inspect.getsource(
-            StageHSMPKCS11Signer.async_sign_raw
+            RemoteSignLabPKCS11Signer.async_sign_raw
         )
         self.assertIn("self._key_handle.sign", raw_signing)
         self.assertNotIn("run_in_executor", raw_signing)
@@ -979,7 +979,7 @@ class SignatureVerificationEndpointTests(unittest.TestCase):
             self.assertTrue(response["timestamp_valid"])
             self.assertIsNotNone(response["timestamp_time"])
             self.assertIn(
-                "Stage-HSM Development TSA",
+                "RemoteSignLab Development TSA",
                 response["tsa_subject"],
             )
             self.assertEqual(
@@ -1002,7 +1002,7 @@ class SigningDatabase:
         self.document = document
         self.user = SimpleNamespace(
             id=document.user_id,
-            full_name="Stage User",
+            full_name="Test User",
         )
         self.added = []
         self.rollback_count = 0
@@ -1321,7 +1321,7 @@ class PAdESSigningWorkflowTests(unittest.TestCase):
                 )
                 self.assertIsNotNone(signature.timestamp_time)
                 self.assertIn(
-                    "Stage-HSM Development TSA",
+                    "RemoteSignLab Development TSA",
                     signature.tsa_certificate_subject,
                 )
                 self.assertEqual(
@@ -1358,7 +1358,7 @@ class PAdESSigningWorkflowTests(unittest.TestCase):
             )
             self.assertIsNotNone(response["timestamp_time"])
             self.assertIn(
-                "Stage-HSM Development TSA",
+                    "RemoteSignLab Development TSA",
                 response["tsa_subject"],
             )
 

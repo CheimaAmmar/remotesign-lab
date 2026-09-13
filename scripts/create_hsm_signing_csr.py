@@ -48,12 +48,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--common-name",
-        default="Stage-HSM Development Signer",
+        default="RemoteSignLab Development Signer",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("certs/stage-hsm-signing.csr"),
+        default=Path("certs/remotesign-lab-signing.csr"),
     )
     arguments = parser.parse_args()
     arguments.output.parent.mkdir(parents=True, exist_ok=True)

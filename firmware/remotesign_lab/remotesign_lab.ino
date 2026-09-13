@@ -7,21 +7,21 @@
 #include "secrets.h"
 #include "trust_anchor.h"
 
-#ifndef STAGE_HSM_AUTH_HARDWARE_AVAILABLE
+#ifndef REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE
   #ifdef __has_include
     #if __has_include(<SPI.h>) \
       && __has_include(<MFRC522.h>) \
       && __has_include(<Adafruit_Fingerprint.h>)
-      #define STAGE_HSM_AUTH_HARDWARE_AVAILABLE 1
+      #define REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE 1
     #else
-      #define STAGE_HSM_AUTH_HARDWARE_AVAILABLE 0
+      #define REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE 0
     #endif
   #else
-    #define STAGE_HSM_AUTH_HARDWARE_AVAILABLE 0
+    #define REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE 0
   #endif
 #endif
 
-#if STAGE_HSM_AUTH_HARDWARE_AVAILABLE
+#if REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE
   #include <SPI.h>
   #include <MFRC522.h>
   #include <Adafruit_Fingerprint.h>
@@ -92,7 +92,7 @@ constexpr int SIMULATED_FINGERPRINT_ID = 1;
 
 static_assert(
   SIMULATE_AUTH_FACTORS
-  || STAGE_HSM_AUTH_HARDWARE_AVAILABLE,
+  || REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE,
   "Installer MFRC522 et Adafruit Fingerprint pour le mode reel"
 );
 
@@ -100,7 +100,7 @@ static_assert(
 // RC522 - CABLAGE A COMPLETER AVANT UTILISATION
 // ======================================================
 
-#if STAGE_HSM_AUTH_HARDWARE_AVAILABLE
+#if REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE
 
 // -1 est une sentinelle volontaire : ce n'est pas un choix de GPIO.
 // Le firmware refuse de demarrer le workflow tant que ces cinq valeurs
@@ -569,7 +569,7 @@ bool testServerConnection() {
 // INITIALISATION RC522
 // ======================================================
 
-#if STAGE_HSM_AUTH_HARDWARE_AVAILABLE
+#if REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE
 
 bool rc522PinsConfigured() {
   return (
@@ -589,7 +589,7 @@ bool initializeRFID() {
     return true;
   }
 
-#if STAGE_HSM_AUTH_HARDWARE_AVAILABLE
+#if REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE
   if (!rc522PinsConfigured()) {
     Serial.println();
     Serial.println("RC522 non configure.");
@@ -636,7 +636,7 @@ bool readRFID(String& uid) {
     return true;
   }
 
-#if STAGE_HSM_AUTH_HARDWARE_AVAILABLE
+#if REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE
   uid = "";
 
   if (!rfidReady) {
@@ -689,7 +689,7 @@ bool initializeFingerprint() {
     return true;
   }
 
-#if STAGE_HSM_AUTH_HARDWARE_AVAILABLE
+#if REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE
   fingerprintSerial.begin(
     FINGERPRINT_BAUD,
     SERIAL_8N1,
@@ -726,7 +726,7 @@ int recognizeFingerprint() {
     return SIMULATED_FINGERPRINT_ID;
   }
 
-#if STAGE_HSM_AUTH_HARDWARE_AVAILABLE
+#if REMOTESIGN_LAB_AUTH_HARDWARE_AVAILABLE
   if (!fingerprintReady) {
     return FINGERPRINT_SENSOR_ERROR;
   }
@@ -1588,7 +1588,7 @@ void setup() {
 
   Serial.println();
   Serial.println("================================");
-  Serial.println(" STAGE-HSM");
+  Serial.println(" REMOTESIGN-LAB");
   Serial.println("================================");
 
   connectWiFi();

@@ -260,7 +260,7 @@ def export_audit_csv(
         headers={
             **NO_STORE_HEADERS,
             "Content-Disposition": (
-                'attachment; filename="stage-hsm-audit.csv"'
+                'attachment; filename="remotesign-lab-audit.csv"'
             ),
         },
     )

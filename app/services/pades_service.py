@@ -56,7 +56,7 @@ class PAdESServiceError(RuntimeError):
     """Controlled error while producing or validating a PAdES PDF."""
 
 
-class StageHSMPKCS11Signer(pkcs11.PKCS11Signer):
+class RemoteSignLabPKCS11Signer(pkcs11.PKCS11Signer):
     """PKCS11Signer variant that keeps token handles on one thread.
 
     pyHanko's default implementation delegates handle loading and signing to
@@ -332,7 +332,7 @@ class PAdESService:
                     .get_secret_value()
                 ),
             )
-            signer = StageHSMPKCS11Signer(
+            signer = RemoteSignLabPKCS11Signer(
                 pkcs11_session=session,
                 signing_cert=signing_certificate,
                 ca_chain=certificate_chain,
@@ -692,19 +692,19 @@ class PAdESService:
                 output_pdf_path.open("wb") as output_pdf,
             ):
                 writer = IncrementalPdfFileWriter(source_pdf)
-                field_name = f"StageHSM_{signature_id.hex}"
+                field_name = f"RemoteSignLab_{signature_id.hex}"
                 field_spec = fields.SigFieldSpec(
                     sig_field_name=field_name,
                     on_page=-1,
                     box=self._visible_signature_box(writer),
                     readable_field_name=(
-                        "Stage-HSM electronic signature"
+                        "RemoteSignLab electronic signature"
                     ),
                 )
                 metadata = signers.PdfSignatureMetadata(
                     field_name=field_name,
                     md_algorithm="sha256",
-                    reason="Stage-HSM user-approved signature",
+                    reason="RemoteSignLab user-approved signature",
                     name=self._safe_visible_text(signer_name),
                     subfilter=SigSeedSubFilter.PADES,
                     embed_validation_info=False,
@@ -717,29 +717,29 @@ class PAdESService:
                     stamp_style=stamp.TextStampStyle(
                         stamp_text=(
                             "SIGNÉ ÉLECTRONIQUEMENT\n"
-                            "Stage-HSM\n"
-                            "Signataire : %(stage_signer)s\n"
-                            "Certificat : %(stage_certificate)s\n"
-                            "Profil : %(stage_profile)s\n"
-                            "Date : %(stage_date)s\n"
-                            "Signature ID : %(stage_signature_id)s"
+                            "RemoteSignLab\n"
+                            "Signataire : %(remotesign_signer)s\n"
+                            "Certificat : %(remotesign_certificate)s\n"
+                            "Profil : %(remotesign_profile)s\n"
+                            "Date : %(remotesign_date)s\n"
+                            "Signature ID : %(remotesign_signature_id)s"
                         ),
                     ),
                     new_field_spec=field_spec,
                 ).sign_pdf(
                     writer,
                     appearance_text_params={
-                        "stage_signer": self._safe_visible_text(
+                        "remotesign_signer": self._safe_visible_text(
                             signer_name
                         ),
-                        "stage_certificate": self._safe_visible_text(
+                        "remotesign_certificate": self._safe_visible_text(
                             certificate_name
                         ),
-                        "stage_profile": profile,
-                        "stage_date": server_signing_time.strftime(
+                        "remotesign_profile": profile,
+                        "remotesign_date": server_signing_time.strftime(
                             "%Y-%m-%d %H:%M:%S UTC"
                         ),
-                        "stage_signature_id": str(signature_id),
+                        "remotesign_signature_id": str(signature_id),
                     },
                     output=output_pdf,
                 )

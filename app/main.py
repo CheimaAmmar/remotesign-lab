@@ -84,7 +84,7 @@ def root() -> dict[str, str]:
 def health_check() -> dict[str, str]:
     return {
         "status": "ok",
-        "service": "stage-hsm-server",
+        "service": "remotesign-lab-server",
         "version": settings.app_version,
     }
 

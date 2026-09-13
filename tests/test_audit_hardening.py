@@ -64,7 +64,7 @@ def build_request(
     path: str,
     *,
     method: str = "GET",
-    user_agent: str = "Stage-HSM audit test",
+    user_agent: str = "RemoteSignLab audit test",
 ) -> Request:
     return Request(
         {
@@ -77,12 +77,12 @@ def build_request(
             "raw_path": path.encode("ascii"),
             "query_string": b"",
             "headers": [
-                (b"host", b"stage-hsm.test"),
+                (b"host", b"remotesign-lab.test"),
                 (b"user-agent", user_agent.encode("ascii")),
                 (b"sec-fetch-site", b"same-origin"),
             ],
             "client": ("127.0.0.1", 42000),
-            "server": ("stage-hsm.test", 443),
+            "server": ("remotesign-lab.test", 443),
         }
     )
 
@@ -257,7 +257,7 @@ class AuditSanitizationTests(unittest.TestCase):
         )
 
         self.assertEqual(event.source_ip, "127.0.0.1")
-        self.assertEqual(event.user_agent, "Stage-HSM audit test")
+        self.assertEqual(event.user_agent, "RemoteSignLab audit test")
         self.assertEqual(event.http_method, "POST")
         self.assertEqual(event.http_path, "/user/login")
 
