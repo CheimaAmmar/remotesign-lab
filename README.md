@@ -134,7 +134,7 @@ The terminal performs the local authentication operations required before the ba
   <img
     src="docs/images/prototype/prototype-complete.jpg"
     alt="RemoteSignLab hardware prototype"
-    width="500"
+    width="400"
   >
 </p>
 
@@ -176,7 +176,7 @@ The schematic integrates:
   <img
     src="docs/images/pcb/schematic.png"
     alt="RemoteSignLab electronic schematic"
-    width="950"
+    width="750"
   >
 </p>
 
@@ -196,7 +196,7 @@ The PCB routing was designed specifically for local prototype fabrication.
   <img
     src="docs/images/pcb/pcb-routing.png"
     alt="RemoteSignLab PCB routing"
-    width="850"
+    width="600"
   >
 </p>
 
@@ -265,7 +265,7 @@ The fabrication pattern is available here:
   <img
     src="docs/images/pcb/pcb-after-laser.jpg"
     alt="RemoteSignLab PCB after Emblaser 2 laser engraving"
-    width="550"
+    width="500"
   >
 </p>
 
@@ -281,7 +281,7 @@ The exposed copper areas will be removed during chemical etching.
   <img
     src="docs/images/pcb/pcb-after-etching.jpg"
     alt="RemoteSignLab PCB after chemical etching"
-    width="550"
+    width="500"
   >
 </p>
 
